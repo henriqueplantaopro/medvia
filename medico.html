@@ -117,26 +117,25 @@
     </div>
     <div id="viewSignup" class="card hidden">
       <h1 class="title">Criar conta</h1>
-      <p class="sub">Seu nome e CRM aparecem nos lançamentos.</p>
+      <p class="sub">Seu nome aparece nos lançamentos.</p>
+      <div class="field">
+        <label>Tipo de cadastro</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="tpMed" class="btn btn-primary" style="flex:1" onclick="setTipoCad('medico')">Médico</button>
+          <button type="button" id="tpOp" class="btn btn-ghost" style="flex:1" onclick="setTipoCad('operador')">Operador</button>
+        </div>
+      </div>
       <div class="field"><label>Nome completo</label><input id="suNome" type="text" autocomplete="name"></div>
       <div class="row2">
-        <div class="field"><label>CRM</label>
+        <div class="field" id="suCrmWrap"><label>CRM</label>
           <div class="crm-row"><select id="suUf" class="crm-uf"></select><input id="suCrm" type="text" inputmode="numeric" placeholder="Número" class="crm-num"></div>
         </div>
         <div class="field"><label>Iniciais (código)</label><input id="suIni" type="text" maxlength="4" style="text-transform:uppercase"></div>
       </div>
-      <p class="muted-note" style="margin-top:-8px;margin-bottom:14px">As iniciais formam o código interno (ex.: <b>JS</b>0001).</p>
       <div class="field"><label>E-mail</label><input id="suEmail" type="email" autocomplete="email" inputmode="email"></div>
       <div class="field"><label>Senha</label><input id="suPass" type="password" autocomplete="new-password"></div>
       <div class="field"><label>WhatsApp</label><input id="suCel" type="text" inputmode="tel" placeholder="(00) 00000-0000"></div>
       <div class="field"><label>CPF</label><input id="suCpf" type="text" inputmode="numeric" placeholder="000.000.000-00"></div>
-      <div class="field"><label>Estado civil</label>
-        <select id="suEstCivil"><option value="">Selecione…</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
-      </div>
-      <div class="field"><label>Endereço</label><input id="suEndereco" type="text" placeholder="Rua, nº, bairro, cidade/UF"></div>
-      <div class="field"><label>Especialidade</label><select id="suEsp"><option value="">Selecione…</option></select></div>
-      <div class="field"><label>Data de nascimento</label><input id="suNasc" type="date"></div>
-      <div class="field"><label>RQE (opcional)</label><input id="suRqe" type="text"></div>
       <button class="btn btn-primary" onclick="doSignup()">Criar conta</button>
       <div id="suErr" class="err hidden"></div>
       <div class="switch-link">Já tem conta? <a onclick="showView('Login')">Entrar</a></div>
@@ -245,13 +244,6 @@
         <p class="muted-note" style="margin-top:-8px;margin-bottom:14px">As iniciais valem para os <b>próximos</b> lançamentos; os já gerados não mudam.</p>
         <div class="field"><label>WhatsApp</label><input id="dCel" type="text" inputmode="tel" placeholder="(00) 00000-0000"></div>
         <div class="field"><label>CPF</label><input id="dCpf" type="text" inputmode="numeric" placeholder="000.000.000-00"></div>
-        <div class="field"><label>Estado civil</label>
-          <select id="dEstCivil"><option value="">Selecione…</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
-        </div>
-        <div class="field"><label>Endereço</label><input id="dEndereco" type="text" placeholder="Rua, nº, bairro, cidade/UF"></div>
-        <div class="field"><label>Especialidade</label><select id="dEsp"><option value="">Selecione…</option></select></div>
-        <div class="field"><label>Data de nascimento</label><input id="dNasc" type="date"></div>
-        <div class="field"><label>RQE (opcional)</label><input id="dRqe" type="text"></div>
         <button class="btn btn-go" onclick="salvarDados()">Salvar alterações</button>
         <button class="btn btn-ghost" style="margin-top:10px" onclick="goHome()">Voltar</button>
         <div id="dadosErr" class="err hidden"></div>
@@ -271,7 +263,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.07.06 · medvia-1';
+const APP_VERSION = '2026.07.06 · medvia-2';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
@@ -291,14 +283,13 @@ function iniciaisDe(nome){ const ig=new Set(['da','de','do','das','dos','e']);
   return (nome||'').trim().split(/\s+/).filter(w=>!ig.has(w.toLowerCase())).map(w=>w[0]||'').join('').toUpperCase().slice(0,4); }
 function dentroDoPrazo(iso){ return (Date.now()-new Date(iso).getTime()) < 60*60*1000; }
 
-/* especialidades + UF */
-const ESPECIALIDADES=['Anestesiologia','Cardiologia','Cirurgia Geral','Cirurgia Plástica','Clínica Médica',
-  'Coloproctologia','Dermatologia','Endoscopia','Gastroenterologia','Ginecologia e Obstetrícia',
-  'Mastologia','Medicina de Emergência','Medicina de Família e Comunidade','Nefrologia','Neurocirurgia',
-  'Neurologia','Oftalmologia','Ortopedia e Traumatologia','Otorrinolaringologia','Pediatria',
-  'Pneumologia','Psiquiatria','Radiologia e Diagnóstico por Imagem','Urologia'];
-(function(){ ['suEsp','dEsp'].forEach(id=>{ const sel=$(id); if(!sel) return;
-  ESPECIALIDADES.forEach(e=>{ const o=document.createElement('option'); o.value=e; o.textContent=e; sel.appendChild(o); }); }); })();
+/* tipo de cadastro (médico/operador) */
+let tipoCad='medico';
+function setTipoCad(t){ tipoCad=t;
+  $('tpMed').className='btn '+(t==='medico'?'btn-primary':'btn-ghost');
+  $('tpOp').className='btn '+(t==='operador'?'btn-primary':'btn-ghost');
+  $('suCrmWrap').style.display = (t==='operador')?'none':'';
+}
 const UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 function preencherUF(sel){ if(!sel) return;
   let h='<option value="">UF</option><option value="RJ">RJ</option><option value="SP">SP</option><option disabled>──────</option>';
@@ -326,16 +317,14 @@ async function doLogin(){
 }
 async function doSignup(){
   hideErr('suErr');
+  const ehMed = tipoCad==='medico';
   const nome=$('suNome').value.trim(), crmNum=$('suCrm').value.trim(), uf=$('suUf').value,
-        crm=juntarCRM(uf,crmNum), ini=$('suIni').value.trim().toUpperCase(),
-        email=$('suEmail').value.trim(), pass=$('suPass').value, cel=$('suCel').value.trim(),
-        cpf=$('suCpf').value.trim(), estciv=$('suEstCivil').value, end=$('suEndereco').value.trim(),
-        esp=$('suEsp').value, nasc=$('suNasc').value, rqe=$('suRqe').value.trim();
-  if(!nome||!crmNum||!ini||!email||!pass||!cel) return showErr('suErr','Preencha nome, CRM, iniciais, e-mail, senha e WhatsApp.');
-  if(!uf) return showErr('suErr','Selecione a UF do CRM.');
-  if(!cpf||!estciv||!end||!esp||!nasc) return showErr('suErr','Preencha CPF, estado civil, endereço, especialidade e nascimento.');
+        crm=ehMed?juntarCRM(uf,crmNum):'', ini=$('suIni').value.trim().toUpperCase(),
+        email=$('suEmail').value.trim(), pass=$('suPass').value, cel=$('suCel').value.trim(), cpf=$('suCpf').value.trim();
+  if(!nome||!ini||!email||!pass||!cel) return showErr('suErr','Preencha nome, iniciais, e-mail, senha e WhatsApp.');
+  if(ehMed && (!crmNum||!uf)) return showErr('suErr','Preencha o CRM e a UF.');
   const {error}=await sb.auth.signUp({email,password:pass,options:{data:{
-    nome,crm,iniciais:ini,celular:cel,cpf,estado_civil:estciv,endereco:end,especialidade:esp,data_nascimento:nasc,rqe:rqe||null }}});
+    nome, crm, iniciais:ini, celular:cel, cpf, papel:tipoCad }}});
   if(error){
     const m=(error.message||'').toLowerCase(), code=String(error.code||''), status=Number(error.status||0);
     if(m.includes('registered')||code.includes('already')) return showErr('suErr','E-mail já cadastrado.');
@@ -555,10 +544,7 @@ function abrirDados(){
   hideErr('dadosErr');
   $('dNome').value=perfil.nome||'';
   { const c=splitCRM(perfil.crm); $('dUf').value=c.uf; $('dCrm').value=c.num; }
-  $('dIni').value=perfil.iniciais||''; $('dCel').value=perfil.celular||'';
-  $('dCpf').value=perfil.cpf||''; $('dEstCivil').value=perfil.estado_civil||'';
-  $('dEndereco').value=perfil.endereco||''; $('dEsp').value=perfil.especialidade||'';
-  $('dNasc').value=perfil.data_nascimento||''; $('dRqe').value=perfil.rqe||'';
+  $('dIni').value=perfil.iniciais||''; $('dCel').value=perfil.celular||''; $('dCpf').value=perfil.cpf||'';
   ['viewHome','viewNovo','viewOk'].forEach(v=>$(v).classList.add('hidden'));
   $('viewDados').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
 }
@@ -566,9 +552,7 @@ async function salvarDados(){
   hideErr('dadosErr');
   const nome=$('dNome').value.trim(); if(!nome) return showErr('dadosErr','Informe o nome.');
   const upd={ nome, crm:juntarCRM($('dUf').value,$('dCrm').value), iniciais:$('dIni').value.trim().toUpperCase(),
-    celular:$('dCel').value.trim()||null, cpf:$('dCpf').value.trim()||null, estado_civil:$('dEstCivil').value||null,
-    endereco:$('dEndereco').value.trim()||null, especialidade:$('dEsp').value||null,
-    data_nascimento:$('dNasc').value||null, rqe:$('dRqe').value.trim()||null };
+    celular:$('dCel').value.trim()||null, cpf:$('dCpf').value.trim()||null };
   const {error}=await sb.from('medicos').update(upd).eq('id',perfil.id);
   if(error) return showErr('dadosErr','Erro ao salvar: '+(error.message||error));
   perfil={...perfil,...upd};
