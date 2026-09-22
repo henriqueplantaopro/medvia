@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4a9e2f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MedVia">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<title>MedVia</title>
+<style>
+  :root{
+    --bg:#eef4ea; --surface:#ffffff; --ink:#16321a; --muted:#5e7261;
+    --line:#d7e3d1; --brand:#4a9e2f; --brand-d:#3c7d25; --brand-l:#e7f4de;
+    --green:#0a8f5b; --red:#c0392b; --amber:#b8761b;
+    --radius:14px; --shadow:0 1px 2px rgba(22,50,26,.06),0 6px 18px rgba(22,50,26,.06);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  a[onclick],.switch-link a{cursor:pointer}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;padding-bottom:env(safe-area-inset-bottom)}
+  .hidden{display:none!important}
+  header{background:var(--brand);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;position:sticky;top:0;z-index:20}
+  header .brand{display:flex;flex-direction:column;min-width:0}
+  header .brand b{font-size:18px;letter-spacing:.2px;line-height:1.15}
+  header .brand span{font-size:12px;opacity:.85}
+  .hdr-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:14px}
+  .hdr-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:13px;color:#fff;
+    padding:11px 3px;font-size:11px;font-weight:600;cursor:pointer;min-height:60px;line-height:1}
+  .hdr-nav button:active{background:rgba(255,255,255,.24)}
+  .hdr-nav button svg{width:21px;height:21px}
+  main{max-width:560px;margin:0 auto;padding:18px 16px 96px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px}
+  input[type=text],input[type=email],input[type=password],input[type=date],textarea,select{
+    width:100%;border:1.5px solid var(--line);border-radius:11px;padding:13px 14px;font-size:16px;background:#fff;color:var(--ink);font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-l)}
+  textarea{resize:vertical;min-height:64px}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:active{background:var(--brand-d)}
+  .btn-go{background:var(--green);color:#fff}
+  .btn-ghost{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;filter:grayscale(.4)}
+  .crm-row{display:flex;gap:8px}
+  .crm-row .crm-uf{flex:0 0 96px}
+  .crm-row .crm-num{flex:1}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  h1.title{font-size:22px;margin:2px 0 2px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  .muted-note{font-size:12px;color:var(--muted);margin-top:6px}
+  .foto-botoes{display:flex;gap:10px}
+  .btn-foto{flex:1;border:1.5px solid var(--brand);background:#fff;color:var(--brand);border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer}
+  .btn-foto:active{background:var(--brand-l)}
+  .photo-row{display:flex;align-items:center;gap:12px}
+  .photo-row .thumb{width:54px;height:54px;border-radius:10px;object-fit:cover;border:1px solid var(--line)}
+  .lanc{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px}
+  .lanc .head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .lanc .codigo{font-weight:800;color:var(--brand);font-size:15px;font-variant-numeric:tabular-nums}
+  .lanc .when{font-size:12px;color:var(--muted)}
+  .lanc .pac{font-size:15px;margin:6px 0 2px}
+  .lanc .item{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:6px 0 0}
+  .lanc .item .nm{color:var(--ink)}
+  .lanc .item .v{font-variant-numeric:tabular-nums;color:var(--brand-d);font-weight:700;white-space:nowrap}
+  .lanc .acts{display:flex;gap:14px;margin-top:10px;font-size:13px}
+  .lanc .acts a{color:var(--muted);text-decoration:none;font-weight:600}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--ink);color:#fff;padding:13px 18px;border-radius:12px;font-size:14px;z-index:60;box-shadow:var(--shadow);max-width:90%;text-align:center}
+  .err{color:var(--red);font-size:14px;margin-top:10px}
+  .ok-box{background:#eafaf2;border:1px solid #b7e6cf;border-radius:12px;padding:18px;text-align:center}
+  .ok-box .big{font-size:26px;font-weight:800;color:var(--green);letter-spacing:.5px}
+  .switch-link{text-align:center;margin-top:14px;font-size:14px;color:var(--muted)}
+  .switch-link a{color:var(--brand);font-weight:700;text-decoration:none}
+  .fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));width:min(528px,calc(100% - 32px));z-index:15}
+  .fab .btn{width:100%}
+  .fab-msg{text-align:center;font-size:12.5px;font-weight:600;color:#9a6212;margin-top:6px;background:#fff8ec;border:1px solid var(--amber);border-radius:9px;padding:6px 8px}
+  .periodo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .periodo label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+  .resumo-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .rk{background:var(--brand-l);border:1px solid #cfe3c5;border-radius:12px;padding:14px}
+  .rk-n{font-size:24px;font-weight:800;color:var(--brand-d);font-variant-numeric:tabular-nums;line-height:1.1}
+  .rk-l{font-size:12px;color:var(--muted);margin-top:3px}
+  .quick{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .quick button{flex:1;min-width:90px;border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:9px;font-size:13px;font-weight:600;cursor:pointer}
+  .quick button.on{border-color:var(--brand);background:var(--brand-l);color:var(--brand-d)}
+  .paginacao{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0 6px}
+  .paginacao button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .paginacao button:disabled{opacity:.4;cursor:default}
+  .paginacao span{font-size:14px;color:var(--muted)}
+  .aviso-bloq{background:#fff8ec;border:1px solid var(--amber);border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px;color:#9a6212;font-weight:600}
+  .ver-stamp{position:fixed;right:8px;bottom:7px;font-size:10px;color:#8aa2a5;z-index:5;pointer-events:none;background:rgba(255,255,255,.72);padding:1px 7px;border-radius:6px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN / CADASTRO ============ -->
+<div id="auth">
+  <header><div class="brand"><b>MedVia</b><span>Acesso do médico</span></div></header>
+  <div class="ver-stamp" id="verStamp"></div>
+  <main>
+    <div id="viewLogin" class="card">
+      <h1 class="title">Entrar</h1>
+      <p class="sub">Use seu e-mail e senha cadastrados.</p>
+      <div class="field"><label>E-mail</label><input id="loginEmail" type="email" autocomplete="username" inputmode="email"></div>
+      <div class="field"><label>Senha</label><input id="loginPass" type="password" autocomplete="current-password"></div>
+      <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
+      <div id="loginErr" class="err hidden"></div>
+      <div class="switch-link">Primeiro acesso? <a onclick="showView('Signup')">Criar conta</a></div>
+    </div>
+    <div id="viewSignup" class="card hidden">
+      <h1 class="title">Criar conta</h1>
+      <p class="sub">Seu nome e CRM aparecem nos lançamentos.</p>
+      <div class="field"><label>Nome completo</label><input id="suNome" type="text" autocomplete="name"></div>
+      <div class="row2">
+        <div class="field"><label>CRM</label>
+          <div class="crm-row"><select id="suUf" class="crm-uf"></select><input id="suCrm" type="text" inputmode="numeric" placeholder="Número" class="crm-num"></div>
+        </div>
+        <div class="field"><label>Iniciais (código)</label><input id="suIni" type="text" maxlength="4" style="text-transform:uppercase"></div>
+      </div>
+      <p class="muted-note" style="margin-top:-8px;margin-bottom:14px">As iniciais formam o código interno (ex.: <b>JS</b>0001).</p>
+      <div class="field"><label>E-mail</label><input id="suEmail" type="email" autocomplete="email" inputmode="email"></div>
+      <div class="field"><label>Senha</label><input id="suPass" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>WhatsApp</label><input id="suCel" type="text" inputmode="tel" placeholder="(00) 00000-0000"></div>
+      <div class="field"><label>CPF</label><input id="suCpf" type="text" inputmode="numeric" placeholder="000.000.000-00"></div>
+      <div class="field"><label>Estado civil</label>
+        <select id="suEstCivil"><option value="">Selecione…</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+      </div>
+      <div class="field"><label>Endereço</label><input id="suEndereco" type="text" placeholder="Rua, nº, bairro, cidade/UF"></div>
+      <div class="field"><label>Especialidade</label><select id="suEsp"><option value="">Selecione…</option></select></div>
+      <div class="field"><label>Data de nascimento</label><input id="suNasc" type="date"></div>
+      <div class="field"><label>RQE (opcional)</label><input id="suRqe" type="text"></div>
+      <button class="btn btn-primary" onclick="doSignup()">Criar conta</button>
+      <div id="suErr" class="err hidden"></div>
+      <div class="switch-link">Já tem conta? <a onclick="showView('Login')">Entrar</a></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header>
+    <div class="brand"><b id="hdNome">—</b><span id="hdCrm">—</span></div>
+    <nav class="hdr-nav">
+      <button onclick="goHome()" aria-label="Início"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg><span>Início</span></button>
+      <button onclick="abrirDados()" aria-label="Dados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c0-4 3.5-6 7.5-6s7.5 2 7.5 6"/></svg><span>Dados</span></button>
+      <button onclick="logout()" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h12"/></svg><span>Sair</span></button>
+    </nav>
+  </header>
+  <main>
+    <!-- Home -->
+    <div id="viewHome">
+      <div id="avisoBloqueio" class="aviso-bloq hidden">Cadastro em análise. Solicite a liberação do acesso ao gestor para habilitar lançamentos.</div>
+      <div class="card">
+        <h1 class="title" style="font-size:18px;margin-bottom:12px">Meu resumo</h1>
+        <div class="quick">
+          <button id="qMes" class="on" onclick="periodoRapido('mes')">Este mês</button>
+          <button id="qAnt" onclick="periodoRapido('ant')">Mês passado</button>
+          <button id="qAno" onclick="periodoRapido('ano')">Este ano</button>
+        </div>
+        <div class="periodo">
+          <div><label>De</label><input id="rDe" type="date" onchange="periodoManual()"></div>
+          <div><label>Até</label><input id="rAte" type="date" onchange="periodoManual()"></div>
+        </div>
+        <div class="resumo-kpis">
+          <div class="rk"><div class="rk-n" id="rProc">0</div><div class="rk-l">Procedimentos</div></div>
+          <div class="rk"><div class="rk-n" id="rRec">R$ 0</div><div class="rk-l">Valor a receber</div></div>
+        </div>
+      </div>
+      <h1 class="title">Meus lançamentos</h1>
+      <p class="sub" id="homeSub">—</p>
+      <div id="lista"></div>
+      <div id="paginacao" class="paginacao"></div>
+    </div>
+
+    <!-- Novo lançamento -->
+    <div id="viewNovo" class="hidden">
+      <div class="card">
+        <h1 class="title" id="novoTitulo">Novo lançamento</h1>
+        <p class="sub" id="novoSub">Preencha após o procedimento.</p>
+        <div class="field">
+          <label>Nome do paciente</label>
+          <input id="paciente" type="text" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Procedimento realizado</label>
+          <select id="selProc"><option value="">Selecione o procedimento…</option></select>
+        </div>
+        <div class="field">
+          <label>Foto da ficha (obrigatória)</label>
+          <div class="foto-botoes">
+            <button type="button" class="btn-foto" onclick="$('fotoCam').click()">Tirar foto</button>
+            <button type="button" class="btn-foto" onclick="$('fotoGal').click()">Da galeria</button>
+          </div>
+          <input id="fotoCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="onFoto(event)">
+          <input id="fotoGal" type="file" accept="image/*" class="hidden" onchange="onFoto(event)">
+          <div class="photo-row" style="margin-top:10px">
+            <img id="fotoThumb" class="thumb hidden" alt="">
+            <span id="fotoNomeArq" class="muted-note"></span>
+          </div>
+          <p id="fotoReq" class="muted-note" style="color:#c0392b;font-weight:600">Anexe a foto da ficha para concluir o lançamento.</p>
+          <p id="fotoNota" class="muted-note hidden">A foto atual é mantida; só escolha uma nova se quiser trocá-la.</p>
+        </div>
+        <div class="field">
+          <label>Observação (opcional)</label>
+          <textarea id="obs" placeholder=""></textarea>
+        </div>
+        <button id="btnSalvar" class="btn btn-go" onclick="salvar()">Concluir lançamento</button>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="goHome()">Cancelar</button>
+        <div id="novoErr" class="err hidden"></div>
+      </div>
+    </div>
+
+    <!-- Confirmação -->
+    <div id="viewOk" class="hidden">
+      <div class="card">
+        <div class="ok-box">
+          <p style="margin:0 0 6px;color:var(--muted)" id="okMsg">Lançamento registrado</p>
+          <div class="big" id="okCodigo">—</div>
+        </div>
+        <button class="btn btn-go" style="margin-top:16px" onclick="novoLancamento()">Novo lançamento</button>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="goHome()">Ver meus lançamentos</button>
+      </div>
+    </div>
+
+    <!-- Meus dados -->
+    <div id="viewDados" class="hidden">
+      <div class="card">
+        <h1 class="title">Meus dados</h1>
+        <p class="sub">Corrija ou complete suas informações.</p>
+        <div class="field"><label>Nome completo</label><input id="dNome" type="text" autocomplete="name"></div>
+        <div class="row2">
+          <div class="field"><label>CRM</label>
+            <div class="crm-row"><select id="dUf" class="crm-uf"></select><input id="dCrm" type="text" inputmode="numeric" placeholder="Número" class="crm-num"></div>
+          </div>
+          <div class="field"><label>Iniciais (código)</label><input id="dIni" type="text" maxlength="4" style="text-transform:uppercase"></div>
+        </div>
+        <p class="muted-note" style="margin-top:-8px;margin-bottom:14px">As iniciais valem para os <b>próximos</b> lançamentos; os já gerados não mudam.</p>
+        <div class="field"><label>WhatsApp</label><input id="dCel" type="text" inputmode="tel" placeholder="(00) 00000-0000"></div>
+        <div class="field"><label>CPF</label><input id="dCpf" type="text" inputmode="numeric" placeholder="000.000.000-00"></div>
+        <div class="field"><label>Estado civil</label>
+          <select id="dEstCivil"><option value="">Selecione…</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+        </div>
+        <div class="field"><label>Endereço</label><input id="dEndereco" type="text" placeholder="Rua, nº, bairro, cidade/UF"></div>
+        <div class="field"><label>Especialidade</label><select id="dEsp"><option value="">Selecione…</option></select></div>
+        <div class="field"><label>Data de nascimento</label><input id="dNasc" type="date"></div>
+        <div class="field"><label>RQE (opcional)</label><input id="dRqe" type="text"></div>
+        <button class="btn btn-go" onclick="salvarDados()">Salvar alterações</button>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="goHome()">Voltar</button>
+        <div id="dadosErr" class="err hidden"></div>
+      </div>
+    </div>
+  </main>
+  <div id="fab" class="fab">
+    <button id="btnNovo" class="btn btn-primary" onclick="novoLancamento()">+ Novo lançamento</button>
+    <div id="fabMsg" class="fab-msg hidden">Solicite liberação do gestor</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){
+  alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
+}
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const APP_VERSION = '2026.07.06 · medvia-1';
+try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
+
+let perfil = null;
+let procs = [];            // catálogo (id, nome, repasse)
+let fotoFile = null, fotoExistente = false;
+let editId = null;
+let listPagina = 0;
+const PAG = 20;
+
+const $ = id => document.getElementById(id);
+const brl = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+function showErr(id,msg){ const e=$(id); e.textContent=msg; e.classList.remove('hidden'); }
+function hideErr(id){ $(id).classList.add('hidden'); }
+function fmtData(iso){ return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function iniciaisDe(nome){ const ig=new Set(['da','de','do','das','dos','e']);
+  return (nome||'').trim().split(/\s+/).filter(w=>!ig.has(w.toLowerCase())).map(w=>w[0]||'').join('').toUpperCase().slice(0,4); }
+function dentroDoPrazo(iso){ return (Date.now()-new Date(iso).getTime()) < 60*60*1000; }
+
+/* especialidades + UF */
+const ESPECIALIDADES=['Anestesiologia','Cardiologia','Cirurgia Geral','Cirurgia Plástica','Clínica Médica',
+  'Coloproctologia','Dermatologia','Endoscopia','Gastroenterologia','Ginecologia e Obstetrícia',
+  'Mastologia','Medicina de Emergência','Medicina de Família e Comunidade','Nefrologia','Neurocirurgia',
+  'Neurologia','Oftalmologia','Ortopedia e Traumatologia','Otorrinolaringologia','Pediatria',
+  'Pneumologia','Psiquiatria','Radiologia e Diagnóstico por Imagem','Urologia'];
+(function(){ ['suEsp','dEsp'].forEach(id=>{ const sel=$(id); if(!sel) return;
+  ESPECIALIDADES.forEach(e=>{ const o=document.createElement('option'); o.value=e; o.textContent=e; sel.appendChild(o); }); }); })();
+const UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+function preencherUF(sel){ if(!sel) return;
+  let h='<option value="">UF</option><option value="RJ">RJ</option><option value="SP">SP</option><option disabled>──────</option>';
+  h+=UFS.map(u=>`<option value="${u}">${u}</option>`).join(''); sel.innerHTML=h; }
+function splitCRM(crm){ const s=String(crm||'').trim(); const m=s.match(/^([A-Za-z]{2})\s*[-\s]\s*(.+)$/);
+  return m ? {uf:m[1].toUpperCase(), num:m[2].trim()} : {uf:'', num:s}; }
+function juntarCRM(uf,num){ num=String(num||'').trim(); uf=String(uf||'').trim().toUpperCase(); return uf ? (uf+'-'+num) : num; }
+preencherUF($('suUf')); preencherUF($('dUf'));
+$('suNome')?.addEventListener('input', e=>{ $('suIni').value = iniciaisDe(e.target.value); });
+
+/* navegação */
+function showView(name){ ['Login','Signup'].forEach(v=>$('view'+v)?.classList.add('hidden')); $('view'+name)?.classList.remove('hidden'); }
+function goHome(){ ['viewNovo','viewOk','viewDados'].forEach(v=>$(v).classList.add('hidden'));
+  $('viewHome').classList.remove('hidden'); $('fab').classList.remove('hidden');
+  listPagina=0; carregarLista(); carregarResumo(); }
+
+/* ---------- auth ---------- */
+async function doLogin(){
+  hideErr('loginErr');
+  const email=$('loginEmail').value.trim(), pass=$('loginPass').value;
+  if(!email||!pass) return showErr('loginErr','Preencha e-mail e senha.');
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error) return showErr('loginErr','Não foi possível entrar. Verifique e-mail e senha.');
+  await iniciarSessao();
+}
+async function doSignup(){
+  hideErr('suErr');
+  const nome=$('suNome').value.trim(), crmNum=$('suCrm').value.trim(), uf=$('suUf').value,
+        crm=juntarCRM(uf,crmNum), ini=$('suIni').value.trim().toUpperCase(),
+        email=$('suEmail').value.trim(), pass=$('suPass').value, cel=$('suCel').value.trim(),
+        cpf=$('suCpf').value.trim(), estciv=$('suEstCivil').value, end=$('suEndereco').value.trim(),
+        esp=$('suEsp').value, nasc=$('suNasc').value, rqe=$('suRqe').value.trim();
+  if(!nome||!crmNum||!ini||!email||!pass||!cel) return showErr('suErr','Preencha nome, CRM, iniciais, e-mail, senha e WhatsApp.');
+  if(!uf) return showErr('suErr','Selecione a UF do CRM.');
+  if(!cpf||!estciv||!end||!esp||!nasc) return showErr('suErr','Preencha CPF, estado civil, endereço, especialidade e nascimento.');
+  const {error}=await sb.auth.signUp({email,password:pass,options:{data:{
+    nome,crm,iniciais:ini,celular:cel,cpf,estado_civil:estciv,endereco:end,especialidade:esp,data_nascimento:nasc,rqe:rqe||null }}});
+  if(error){
+    const m=(error.message||'').toLowerCase(), code=String(error.code||''), status=Number(error.status||0);
+    if(m.includes('registered')||code.includes('already')) return showErr('suErr','E-mail já cadastrado.');
+    if(status===429||m.includes('rate')||m.includes('seconds')){
+      const seg=(error.message||'').match(/(\d+)\s*seconds?/);
+      return showErr('suErr', seg ? 'Muitas tentativas. Aguarde '+seg[1]+' segundos.' : 'Muitas tentativas. Aguarde um instante.');
+    }
+    return showErr('suErr','Erro ao criar conta: '+(error.message||('código '+(code||status))));
+  }
+  let {data:{session}}=await sb.auth.getSession();
+  if(!session){ const {error:el}=await sb.auth.signInWithPassword({email,password:pass});
+    if(el){ toast('Conta criada. Faça o login.'); showView('Login'); return; } }
+  await iniciarSessao();
+}
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+async function iniciarSessao(){
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user) return;
+  let dev=localStorage.getItem('medvia_device');
+  if(!dev){ dev=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)); localStorage.setItem('medvia_device',dev); }
+  const {data:vinc}=await sb.rpc('vincular_aparelho',{p_device:dev});
+  if(vinc==='bloqueado'){
+    await sb.auth.signOut();
+    $('app').classList.add('hidden'); $('auth').classList.remove('hidden');
+    showErr('loginErr','Esta conta já está vinculada a outro aparelho. Peça ao gestor para liberar o vínculo (Resetar aparelho).');
+    return;
+  }
+  await sb.rpc('garantir_perfil');
+  let {data,error}=await sb.from('medicos').select('*').eq('id',user.id).maybeSingle();
+  if(error||!data){ toast('Não foi possível carregar o perfil.'); return; }
+  perfil=data;
+  $('hdNome').textContent=perfil.nome;
+  $('hdCrm').textContent='CRM '+perfil.crm+' · '+perfil.iniciais;
+  $('auth').classList.add('hidden'); $('app').classList.remove('hidden');
+  const bloq = perfil.ativo===false;
+  $('btnNovo').disabled = bloq;
+  $('fabMsg').classList.toggle('hidden', !bloq);
+  $('avisoBloqueio').classList.toggle('hidden', !bloq);
+  await carregarProcedimentos();
+  periodoRapido('mes');
+  goHome();
+}
+
+async function carregarProcedimentos(){
+  const {data,error}=await sb.from('vw_procedimentos').select('id,nome,repasse').order('nome');
+  procs = error ? [] : (data||[]);
+  const sel=$('selProc');
+  sel.innerHTML='<option value="">Selecione o procedimento…</option>'+
+    procs.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+}
+
+/* ---------- período / resumo ---------- */
+function periodoRapido(qual){
+  ['qMes','qAnt','qAno'].forEach(id=>$(id).classList.remove('on'));
+  const hoje=new Date(); let de,ate;
+  if(qual==='mes'){ de=new Date(hoje.getFullYear(),hoje.getMonth(),1); ate=new Date(hoje.getFullYear(),hoje.getMonth()+1,0); $('qMes').classList.add('on'); }
+  else if(qual==='ant'){ de=new Date(hoje.getFullYear(),hoje.getMonth()-1,1); ate=new Date(hoje.getFullYear(),hoje.getMonth(),0); $('qAnt').classList.add('on'); }
+  else { de=new Date(hoje.getFullYear(),0,1); ate=new Date(hoje.getFullYear(),11,31); $('qAno').classList.add('on'); }
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  $('rDe').value=iso(de); $('rAte').value=iso(ate);
+  carregarResumo();
+}
+function periodoManual(){ ['qMes','qAnt','qAno'].forEach(id=>$(id).classList.remove('on')); carregarResumo(); }
+
+async function carregarResumo(){
+  if(!perfil) return;
+  const de=$('rDe').value, ate=$('rAte').value;
+  let q=sb.from('lancamentos').select('lancamento_itens(repasse)').eq('medico_id',perfil.id);
+  if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
+  if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
+  const {data,error}=await q.limit(5000);
+  if(error) return;
+  let proc=0, rec=0;
+  (data||[]).forEach(l=>(l.lancamento_itens||[]).forEach(i=>{ proc++; rec+=Number(i.repasse||0); }));
+  $('rProc').textContent=proc;
+  $('rRec').textContent=brl(rec);
+}
+
+/* ---------- lista ---------- */
+async function carregarLista(){
+  if(!perfil) return;
+  const de=$('rDe').value, ate=$('rAte').value;
+  let q=sb.from('lancamentos')
+    .select('id,codigo_interno,paciente_nome,criado_em,lancamento_itens(nome,repasse)',{count:'exact'})
+    .eq('medico_id',perfil.id).order('criado_em',{ascending:false});
+  if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
+  if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
+  q=q.range(listPagina*PAG, listPagina*PAG+PAG-1);
+  const {data,error,count}=await q;
+  const box=$('lista');
+  if(error){ box.innerHTML='<div class="empty">Erro ao carregar.</div>'; return; }
+  if(!data.length){ box.innerHTML='<div class="empty">Nenhum lançamento no período.</div>'; $('homeSub').textContent='—'; $('paginacao').innerHTML=''; return; }
+  $('homeSub').textContent=(count||data.length)+' lançamento(s) no período.';
+  box.innerHTML=data.map(l=>{
+    const it=(l.lancamento_itens||[])[0]||{};
+    const edit = dentroDoPrazo(l.criado_em) ? `<div class="acts"><a onclick="editarLancamento('${l.id}')">Editar</a></div>` : '';
+    return `<div class="lanc">
+      <div class="head"><span class="codigo">${l.codigo_interno||'—'}</span><span class="when">${fmtData(l.criado_em)}</span></div>
+      <div class="pac">${l.paciente_nome||'—'}</div>
+      <div class="item"><span class="nm">${it.nome||'—'}</span><span class="v">${brl(it.repasse)}</span></div>
+      ${edit}</div>`;
+  }).join('');
+  const totPag=Math.max(1, Math.ceil((count||data.length)/PAG));
+  $('paginacao').innerHTML = totPag>1
+    ? `<button onclick="mudarPagina(-1)" ${listPagina===0?'disabled':''}>‹</button>
+       <span>Página ${listPagina+1} de ${totPag}</span>
+       <button onclick="mudarPagina(1)" ${listPagina>=totPag-1?'disabled':''}>›</button>` : '';
+}
+function mudarPagina(d){ listPagina=Math.max(0,listPagina+d); carregarLista(); window.scrollTo(0,0); }
+
+/* ---------- novo / editar ---------- */
+function novoLancamento(){
+  if(perfil && perfil.ativo===false){ toast('Seu acesso não permite lançar. Solicite liberação do gestor.'); return; }
+  editId=null; fotoFile=null; fotoExistente=false;
+  $('paciente').value=''; $('obs').value=''; $('selProc').value='';
+  $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
+  $('novoTitulo').textContent='Novo lançamento'; $('novoSub').textContent='Preencha após o procedimento.';
+  $('btnSalvar').textContent='Concluir lançamento'; $('fotoNota').classList.add('hidden');
+  atualizarBotaoSalvar();
+  $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
+  $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
+}
+async function editarLancamento(id){
+  const {data,error}=await sb.from('lancamentos')
+    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,lancamento_itens(procedimento_id)')
+    .eq('id',id).single();
+  if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
+  if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 1 hora encerrado. Solicite ao gestor.'); carregarLista(); return; }
+  editId=id; fotoFile=null; fotoExistente=!!data.foto_path;
+  $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
+  const it=(data.lancamento_itens||[])[0]||{}; $('selProc').value=it.procedimento_id||'';
+  $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
+  $('novoTitulo').textContent='Editar lançamento'; $('novoSub').textContent='Ajuste o que precisar e salve.';
+  $('btnSalvar').textContent='Salvar alterações'; $('fotoNota').classList.remove('hidden');
+  atualizarBotaoSalvar();
+  $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
+  $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
+}
+function atualizarBotaoSalvar(){
+  const temFoto = !!fotoFile || fotoExistente;
+  $('btnSalvar').disabled = !temFoto;
+  $('fotoReq').classList.toggle('hidden', temFoto);
+}
+
+/* ---------- foto (comprime no aparelho) ---------- */
+async function onFoto(e){
+  const f=e.target.files[0]; if(!f) return;
+  $('fotoNomeArq').textContent='Processando foto…';
+  try{ fotoFile = await comprimirImagem(f); }catch(err){ fotoFile = f; }
+  const kb=Math.max(1,Math.round(fotoFile.size/1024));
+  $('fotoNomeArq').textContent=(fotoFile.name||'foto')+' · '+(kb>=1024?(kb/1024).toFixed(1)+' MB':kb+' KB');
+  const r=new FileReader(); r.onload=()=>{ $('fotoThumb').src=r.result; $('fotoThumb').classList.remove('hidden'); };
+  r.readAsDataURL(fotoFile);
+  atualizarBotaoSalvar();
+}
+function comprimirImagem(file, maxLado=1600, qualidade=0.72){
+  return new Promise((resolve,reject)=>{
+    if(!file.type || !file.type.startsWith('image/')) return resolve(file);
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{ try{
+        let {width:w,height:h}=img; const esc=Math.min(1,maxLado/Math.max(w,h));
+        w=Math.round(w*esc); h=Math.round(h*esc);
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        cv.toBlob(blob=>{ URL.revokeObjectURL(url);
+          if(!blob||blob.size>=file.size) return resolve(file);
+          const nome=(file.name||'foto').replace(/\.[^.]+$/,'')+'.jpg';
+          resolve(new File([blob],nome,{type:'image/jpeg',lastModified:Date.now()}));
+        },'image/jpeg',qualidade);
+      }catch(err){ URL.revokeObjectURL(url); reject(err); } };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
+    img.src=url;
+  });
+}
+
+/* ---------- salvar ---------- */
+async function salvar(){
+  hideErr('novoErr');
+  const pac=$('paciente').value.trim(), proc=$('selProc').value, obs=$('obs').value.trim();
+  if(!pac) return showErr('novoErr','Informe o nome do paciente.');
+  if(!proc) return showErr('novoErr','Selecione o procedimento realizado.');
+  if(!fotoFile && !fotoExistente) return showErr('novoErr','Anexe a foto da ficha.');
+  $('btnSalvar').disabled=true; $('btnSalvar').textContent='Salvando…';
+  try{
+    let lancId=editId;
+    if(editId){
+      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, observacao:obs||null}).eq('id',editId);
+      if(e1) throw e1;
+      const {error:e2}=await sb.from('lancamento_itens').delete().eq('lancamento_id',editId);
+      if(e2) throw e2;
+    } else {
+      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:perfil.id, paciente_nome:pac, observacao:obs||null})
+        .select('id,codigo_interno').single();
+      if(e0) throw e0;
+      lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
+    }
+    const {error:e3}=await sb.from('lancamento_itens').insert({lancamento_id:lancId, procedimento_id:proc});
+    if(e3) throw e3;
+    if(fotoFile){
+      const path=`${perfil.id}/${lancId}.jpg`;
+      const {error:eUp}=await sb.storage.from('fotos').upload(path,fotoFile,{upsert:true});
+      if(!eUp) await sb.from('lancamentos').update({foto_path:path}).eq('id',lancId);
+    }
+    if(editId){ toast('Lançamento atualizado.'); goHome(); }
+    else { $('okMsg').textContent='Lançamento registrado';
+      $('viewNovo').classList.add('hidden'); $('viewOk').classList.remove('hidden'); window.scrollTo(0,0); }
+  }catch(err){
+    showErr('novoErr','Erro ao salvar: '+(err.message||err));
+  }finally{
+    $('btnSalvar').disabled=false; $('btnSalvar').textContent = editId?'Salvar alterações':'Concluir lançamento';
+  }
+}
+
+/* ---------- meus dados ---------- */
+function abrirDados(){
+  hideErr('dadosErr');
+  $('dNome').value=perfil.nome||'';
+  { const c=splitCRM(perfil.crm); $('dUf').value=c.uf; $('dCrm').value=c.num; }
+  $('dIni').value=perfil.iniciais||''; $('dCel').value=perfil.celular||'';
+  $('dCpf').value=perfil.cpf||''; $('dEstCivil').value=perfil.estado_civil||'';
+  $('dEndereco').value=perfil.endereco||''; $('dEsp').value=perfil.especialidade||'';
+  $('dNasc').value=perfil.data_nascimento||''; $('dRqe').value=perfil.rqe||'';
+  ['viewHome','viewNovo','viewOk'].forEach(v=>$(v).classList.add('hidden'));
+  $('viewDados').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
+}
+async function salvarDados(){
+  hideErr('dadosErr');
+  const nome=$('dNome').value.trim(); if(!nome) return showErr('dadosErr','Informe o nome.');
+  const upd={ nome, crm:juntarCRM($('dUf').value,$('dCrm').value), iniciais:$('dIni').value.trim().toUpperCase(),
+    celular:$('dCel').value.trim()||null, cpf:$('dCpf').value.trim()||null, estado_civil:$('dEstCivil').value||null,
+    endereco:$('dEndereco').value.trim()||null, especialidade:$('dEsp').value||null,
+    data_nascimento:$('dNasc').value||null, rqe:$('dRqe').value.trim()||null };
+  const {error}=await sb.from('medicos').update(upd).eq('id',perfil.id);
+  if(error) return showErr('dadosErr','Erro ao salvar: '+(error.message||error));
+  perfil={...perfil,...upd};
+  $('hdNome').textContent=perfil.nome; $('hdCrm').textContent='CRM '+perfil.crm+' · '+perfil.iniciais;
+  toast('Dados atualizados.'); goHome();
+}
+
+/* ---------- boot ---------- */
+(async ()=>{ const {data:{session}}=await sb.auth.getSession(); if(session) await iniciarSessao(); })();
+</script>
+</body>
+</html>
