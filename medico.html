@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#4a9e2f">
+<meta name="theme-color" content="#2f7d33">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,7 +15,7 @@
 <style>
   :root{
     --bg:#eef4ea; --surface:#ffffff; --ink:#16321a; --muted:#5e7261;
-    --line:#d7e3d1; --brand:#4a9e2f; --brand-d:#3c7d25; --brand-l:#e7f4de;
+    --line:#d7e3d1; --brand:#2f7d33; --brand-d:#245f27; --brand-l:#e7f4de;
     --green:#0a8f5b; --red:#c0392b; --amber:#b8761b;
     --radius:14px; --shadow:0 1px 2px rgba(22,50,26,.06),0 6px 18px rgba(22,50,26,.06);
   }
@@ -263,7 +263,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.07.06 · medvia-2';
+const APP_VERSION = '2026.07.06 · medvia-3';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
