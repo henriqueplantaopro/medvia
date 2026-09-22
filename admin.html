@@ -7,14 +7,14 @@
 <style>
   :root{
     --bg:#eef4ea; --surface:#fff; --ink:#16321a; --muted:#5e7261; --line:#d7e3d1;
-    --brand:#4a9e2f; --brand-d:#3c7d25; --brand-l:#e7f4de; --navy:#0a444b;
+    --brand:#2f7d33; --brand-d:#245f27; --brand-l:#e7f4de; --navy:#1f4d2a;
     --green:#0a8f5b; --red:#c0392b; --amber:#b8761b;
     --radius:14px; --shadow:0 1px 2px rgba(22,50,26,.06),0 6px 18px rgba(22,50,26,.06);
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
   .hidden{display:none!important}
-  header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+  header{background:#265c18;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
   header b{font-size:18px}
   header .ghost{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:600;cursor:pointer}
   .tabs{display:flex;gap:4px;background:#dbe7d3;padding:0 12px;overflow-x:auto}
@@ -317,7 +317,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.07.06 · medvia-1';
+const APP_VERSION='2026.07.06 · medvia-3';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -760,7 +760,7 @@ function baixarModelo(mod){ if(mod.custom==='prodmedica') return baixarProdMedic
 
 function baixarEstilizado(mod){
   const cols=mod.cols||[], rows=mod.rows||[];
-  const NAVY='0A444B', LINE='D9E1E2', ZEBRA='F2F7EF', GREY='E7EEEF', money='R$ #,##0.00';
+  const NAVY='1F4D2A', LINE='D9E1E2', ZEBRA='F2F7EF', GREY='E7EEEF', money='R$ #,##0.00';
   const bd={style:'thin',color:{rgb:LINE}}, bAll={top:bd,bottom:bd,left:bd,right:bd}, arial=o=>Object.assign({name:'Arial'},o);
   const aoa=[['DOM PEDRO — MedVia'],[mod.titulo||mod.base],['Período: '+fmtPeriodo()],[]];
   const headRow=aoa.length; aoa.push(cols.map(c=>c.label));
@@ -788,7 +788,7 @@ function baixarEstilizado(mod){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,(mod.titulo||'Rel').slice(0,31)); XLSX.writeFile(wb, nomeArq(mod.base));
 }
 function baixarProdMedica(mod){
-  const cd=mod.colsDef, nc=cd.length, NAVY='0A444B', MEDBG='3C7D25', LINE='D9E1E2', ZEBRA='F2F7EF', GREY='E7EEEF', money='R$ #,##0.00';
+  const cd=mod.colsDef, nc=cd.length, NAVY='1F4D2A', MEDBG='3C7D25', LINE='D9E1E2', ZEBRA='F2F7EF', GREY='E7EEEF', money='R$ #,##0.00';
   const bd={style:'thin',color:{rgb:LINE}}, bAll={top:bd,bottom:bd,left:bd,right:bd}, arial=o=>Object.assign({name:'Arial'},o);
   const aoa=[['DOM PEDRO — MedVia'],[mod.titulo],['Período: '+fmtPeriodo()],[]]; const meta=[];
   const totRow=(a,proc,rep)=>cd.map(c=>{ if(c.label==='Data')return a; if(c.label==='Procedimento')return proc; if(c.money)return rep; return ''; });
@@ -813,7 +813,7 @@ function renderPreview(mod){
   if(mod.custom==='prodmedica'){
     const cd=mod.colsDef; let html='';
     const totRow=(a,proc,rep)=>cd.map(c=>{ if(c.label==='Data')return `<td style="font-weight:700">${a}</td>`; if(c.label==='Procedimento')return `<td style="font-weight:700">${proc}</td>`; if(c.money)return `<td class="num" style="font-weight:700">${brl(rep)}</td>`; return '<td></td>'; }).join('');
-    mod.blocos.forEach(b=>{ html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#3c7d25;color:#fff;font-weight:700;padding:8px 12px">${b.titulo}</div><table class="prev"><thead><tr>`+cd.map(c=>`<th class="${c.money?'num':''}">${c.label}</th>`).join('')+`</tr></thead><tbody>`;
+    mod.blocos.forEach(b=>{ html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#245f27;color:#fff;font-weight:700;padding:8px 12px">${b.titulo}</div><table class="prev"><thead><tr>`+cd.map(c=>`<th class="${c.money?'num':''}">${c.label}</th>`).join('')+`</tr></thead><tbody>`;
       b.linhas.forEach(ln=>{ html+='<tr>'+cd.map(c=>{ let v=ln[c.label]; if(v==null)v=''; if(c.money&&typeof v==='number')v=brl(v); return `<td class="${c.money?'num':''}">${v}</td>`; }).join('')+'</tr>'; });
       html+=`<tr class="tot">${totRow('TOTAL',b.nProc+' procedimento(s)',b.tRep)}</tr></tbody></table></div>`; });
     html+=`<div style="margin-top:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><table class="prev"><tbody><tr class="tot">${totRow('TOTAL GERAL',mod.totProc+' procedimento(s)',mod.totRep)}</tr></tbody></table></div>`;
@@ -825,7 +825,7 @@ function renderPreview(mod){
     html+=`<tr class="${isTot?'tot':''}">`+cols.map(c=>{ let v=r[c.label]; if(v==null)v=''; if(c.money&&typeof v==='number')v=brl(v); return `<td class="${c.money?'num':''}">${v}</td>`; }).join('')+'</tr>'; });
   html+='</tbody></table>';
   if(mod.resumo){ const R=calcResumo(), sp=mod.resumo;
-    html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#0a444b;color:#fff;font-weight:700;padding:8px 12px">RESUMO</div><div style="padding:10px 12px"><div>Nº de procedimentos: <b>${R.nProc}</b></div><div>Nº de lançamentos: <b>${R.nCir}</b></div>${sp.fat?`<div>Total de faturamento: <b>${brl(R.tFat)}</b></div>`:''}${sp.rep?`<div>Total de repasse: <b>${brl(R.tRep)}</b></div>`:''}</div></div>`;
+    html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#1f4d2a;color:#fff;font-weight:700;padding:8px 12px">RESUMO</div><div style="padding:10px 12px"><div>Nº de procedimentos: <b>${R.nProc}</b></div><div>Nº de lançamentos: <b>${R.nCir}</b></div>${sp.fat?`<div>Total de faturamento: <b>${brl(R.tFat)}</b></div>`:''}${sp.rep?`<div>Total de repasse: <b>${brl(R.tRep)}</b></div>`:''}</div></div>`;
   }
   $('relPreview').innerHTML=html;
 }
