@@ -360,7 +360,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.03 · medvia-5';
+const APP_VERSION='2026.11.03 · medvia-6';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -792,12 +792,14 @@ async function baixarFoto(path,nome){ const {data}=await sb.storage.from('fotos'
   const a=document.createElement('a'); a.href=data.signedUrl; a.download=(nome||'foto')+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
 
 /* editar lançamento (gestor/operador) */
-let elLancId=null, elLancMedico=null;
+let elLancId=null, elLancMedico=null, elSetorMedicos=[];
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
   const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
   if(error||!data) return alert('Erro ao abrir.');
   elLancId=id; elLancMedico=data.medico_id;
+  const {data:ms}=await sb.from('medico_setores').select('medico_id').eq('setor_id',data.setor_id);
+  elSetorMedicos=(ms||[]).map(x=>x.medico_id);
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||'';
   const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
@@ -813,7 +815,7 @@ function onElProcChange(){
   const p=procsCat.find(x=>x.id===$('elProc').value);
   const wrap=$('elAuxWrap'), sel=$('elAux');
   if(!p || (p.aux_regra||'bloqueado')==='bloqueado'){ wrap.classList.add('hidden'); sel.innerHTML=''; return; }
-  const lista=medicos.filter(m=>m.papel==='medico' && m.ativo!==false && m.id!==elLancMedico);
+  const lista=medicos.filter(m=>m.papel==='medico' && m.ativo!==false && m.id!==elLancMedico && elSetorMedicos.includes(m.id));
   sel.innerHTML=(p.aux_regra==='opcional'?'<option value="">— sem auxiliar —</option>':'<option value="">Selecione o auxiliar…</option>')
     +lista.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
   $('elAuxLabel').textContent = p.aux_regra==='obrigatorio'?'Médico auxiliar (obrigatório)':'Médico auxiliar (opcional)';
