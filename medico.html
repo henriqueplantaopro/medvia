@@ -188,6 +188,10 @@
           <label>Nome do paciente</label>
           <input id="paciente" type="text" autocomplete="off">
         </div>
+        <div class="field" id="setorWrap">
+          <label>Setor</label>
+          <select id="selSetor" onchange="filtrarProcPorSetor()"><option value="">Selecione o setor…</option></select>
+        </div>
         <div class="field">
           <label>Procedimento realizado</label>
           <select id="selProc"><option value="">Selecione o procedimento…</option></select>
@@ -263,11 +267,12 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.07.06 · medvia-3';
+const APP_VERSION = '2026.11.03 · medvia-4';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
-let procs = [];            // catálogo (id, nome, repasse)
+let procs = [];            // catálogo acessível (id, nome, repasse, setor_id, setor_nome, projeto_nome)
+let setoresMed = [];       // setores em que o médico pode lançar
 let fotoFile = null, fotoExistente = false;
 let editId = null;
 let listPagina = 0;
@@ -370,11 +375,28 @@ async function iniciarSessao(){
 }
 
 async function carregarProcedimentos(){
-  const {data,error}=await sb.from('vw_procedimentos').select('id,nome,repasse').order('nome');
+  const {data,error}=await sb.from('vw_procedimentos').select('id,nome,repasse,setor_id,setor_nome,projeto_nome').order('nome');
   procs = error ? [] : (data||[]);
+  // setores distintos aos quais o médico tem acesso
+  const map={};
+  procs.forEach(p=>{ if(p.setor_id && !map[p.setor_id]) map[p.setor_id]={id:p.setor_id,nome:p.setor_nome||'Setor',projeto:p.projeto_nome||'Projeto'}; });
+  setoresMed=Object.values(map).sort((a,b)=>(a.projeto+a.nome).localeCompare(b.projeto+b.nome));
+  const selS=$('selSetor');
+  if(selS){
+    selS.innerHTML='<option value="">Selecione o setor…</option>'+
+      setoresMed.map(s=>`<option value="${s.id}">${s.projeto} · ${s.nome}</option>`).join('');
+    if(setoresMed.length===1){ selS.value=setoresMed[0].id; $('setorWrap').classList.add('hidden'); }
+    else { $('setorWrap').classList.remove('hidden'); }
+  }
+  filtrarProcPorSetor();
+}
+function filtrarProcPorSetor(){
+  const sid=$('selSetor') ? $('selSetor').value : '';
+  const lista = sid ? procs.filter(p=>p.setor_id===sid) : [];
   const sel=$('selProc');
+  if(!sel) return;
   sel.innerHTML='<option value="">Selecione o procedimento…</option>'+
-    procs.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+    lista.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
 }
 
 /* ---------- período / resumo ---------- */
@@ -439,8 +461,11 @@ function mudarPagina(d){ listPagina=Math.max(0,listPagina+d); carregarLista(); w
 /* ---------- novo / editar ---------- */
 function novoLancamento(){
   if(perfil && perfil.ativo===false){ toast('Seu acesso não permite lançar. Solicite liberação do gestor.'); return; }
+  if(!setoresMed.length){ toast('Nenhum setor habilitado para você. Solicite ao gestor.'); return; }
   editId=null; fotoFile=null; fotoExistente=false;
-  $('paciente').value=''; $('obs').value=''; $('selProc').value='';
+  $('paciente').value=''; $('obs').value='';
+  $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
+  filtrarProcPorSetor(); $('selProc').value='';
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
   $('novoTitulo').textContent='Novo lançamento'; $('novoSub').textContent='Preencha após o procedimento.';
   $('btnSalvar').textContent='Concluir lançamento'; $('fotoNota').classList.add('hidden');
@@ -450,12 +475,13 @@ function novoLancamento(){
 }
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,lancamento_itens(procedimento_id)')
+    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,lancamento_itens(procedimento_id)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 1 hora encerrado. Solicite ao gestor.'); carregarLista(); return; }
   editId=id; fotoFile=null; fotoExistente=!!data.foto_path;
   $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
+  if($('selSetor')){ $('selSetor').value=data.setor_id||''; } filtrarProcPorSetor();
   const it=(data.lancamento_itens||[])[0]||{}; $('selProc').value=it.procedimento_id||'';
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
   $('novoTitulo').textContent='Editar lançamento'; $('novoSub').textContent='Ajuste o que precisar e salve.';
@@ -505,7 +531,9 @@ function comprimirImagem(file, maxLado=1600, qualidade=0.72){
 async function salvar(){
   hideErr('novoErr');
   const pac=$('paciente').value.trim(), proc=$('selProc').value, obs=$('obs').value.trim();
+  const setor=$('selSetor') ? $('selSetor').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
+  if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
   if(!proc) return showErr('novoErr','Selecione o procedimento realizado.');
   if(!fotoFile && !fotoExistente) return showErr('novoErr','Anexe a foto da ficha.');
   $('btnSalvar').disabled=true; $('btnSalvar').textContent='Salvando…';
@@ -517,7 +545,7 @@ async function salvar(){
       const {error:e2}=await sb.from('lancamento_itens').delete().eq('lancamento_id',editId);
       if(e2) throw e2;
     } else {
-      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:perfil.id, paciente_nome:pac, observacao:obs||null})
+      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:perfil.id, setor_id:setor, paciente_nome:pac, observacao:obs||null})
         .select('id,codigo_interno').single();
       if(e0) throw e0;
       lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
