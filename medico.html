@@ -190,7 +190,7 @@
         </div>
         <div class="field" id="setorWrap">
           <label>Setor</label>
-          <select id="selSetor" onchange="filtrarProcPorSetor()"><option value="">Selecione o setor…</option></select>
+          <select id="selSetor" onchange="onSetorChange()"><option value="">Selecione o setor…</option></select>
         </div>
         <div class="field">
           <label>Procedimento realizado</label>
@@ -271,7 +271,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.03 · medvia-5';
+const APP_VERSION = '2026.11.03 · medvia-6';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
@@ -375,14 +375,19 @@ async function iniciarSessao(){
   $('fabMsg').classList.toggle('hidden', !bloq);
   $('avisoBloqueio').classList.toggle('hidden', !bloq);
   await carregarProcedimentos();
-  await carregarAuxiliares();
   periodoRapido('mes');
   goHome();
 }
 
-async function carregarAuxiliares(){
-  const {data,error}=await sb.from('vw_medicos_auxiliares').select('id,nome').order('nome');
+/* auxiliares habilitados no setor escolhido (não todos os médicos) */
+async function carregarAuxiliares(setorId){
+  if(!setorId){ auxDocs=[]; return; }
+  const {data,error}=await sb.rpc('auxiliares_do_setor',{p_setor:setorId});
   auxDocs = error ? [] : (data||[]).filter(m=>m.id!==perfil.id);
+}
+async function onSetorChange(){
+  await carregarAuxiliares($('selSetor') ? $('selSetor').value : '');
+  filtrarProcPorSetor();
 }
 
 async function carregarProcedimentos(){
@@ -399,6 +404,7 @@ async function carregarProcedimentos(){
     if(setoresMed.length===1){ selS.value=setoresMed[0].id; $('setorWrap').classList.add('hidden'); }
     else { $('setorWrap').classList.remove('hidden'); }
   }
+  await carregarAuxiliares(selS ? selS.value : '');
   filtrarProcPorSetor();
 }
 function filtrarProcPorSetor(){
@@ -493,7 +499,7 @@ function novoLancamento(){
   editId=null; fotoFile=null; fotoExistente=false;
   $('paciente').value=''; $('obs').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
-  filtrarProcPorSetor(); $('selProc').value='';
+  onSetorChange();
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
   $('novoTitulo').textContent='Novo lançamento'; $('novoSub').textContent='Preencha após o procedimento.';
   $('btnSalvar').textContent='Concluir lançamento'; $('fotoNota').classList.add('hidden');
@@ -509,7 +515,8 @@ async function editarLancamento(id){
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 1 hora encerrado. Solicite ao gestor.'); carregarLista(); return; }
   editId=id; fotoFile=null; fotoExistente=!!data.foto_path;
   $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
-  if($('selSetor')){ $('selSetor').value=data.setor_id||''; } filtrarProcPorSetor();
+  if($('selSetor')){ $('selSetor').value=data.setor_id||''; }
+  await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
   const it=(data.lancamento_itens||[])[0]||{}; $('selProc').value=it.procedimento_id||'';
   onProcChange(); if($('selAux')) $('selAux').value=data.medico_auxiliar_id||'';
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
