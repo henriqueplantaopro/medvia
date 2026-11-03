@@ -113,6 +113,7 @@
     <button class="tab-btn" data-t="cal" id="btnCal" onclick="showTab('cal')" style="display:none">Calendário</button>
     <button class="tab-btn" data-t="lanc" onclick="showTab('lanc')">Lançamentos</button>
     <button class="tab-btn" data-t="rel" onclick="showTab('rel')">Relatórios</button>
+    <button class="tab-btn" data-t="proj" onclick="showTab('proj')">Projetos</button>
     <button class="tab-btn" data-t="proc" onclick="showTab('proc')">Procedimentos</button>
     <button class="tab-btn" data-t="cad" onclick="showTab('cad')">Cadastros</button>
   </nav>
@@ -143,8 +144,10 @@
     <div class="tab hidden" id="tab-lanc">
       <div class="card" id="cardImport" style="display:none">
         <h1 class="title" style="font-size:17px">Importar lançamentos (Excel)</h1>
-        <p class="sub">Colunas: Data · Paciente · CRM · Procedimento (nome exato do catálogo).</p>
+        <p class="sub">Colunas: Data · Paciente · CRM · Procedimento (nome exato do catálogo do setor escolhido).</p>
         <div class="filters">
+          <div><label>Projeto</label><select id="impProj" onchange="onImpProjChange()"></select></div>
+          <div><label>Setor</label><select id="impSetor"></select></div>
           <div><label>Arquivo .xlsx</label><input id="impFile" type="file" accept=".xlsx,.xls"></div>
           <div class="actions">
             <button class="btn btn-ghost" onclick="baixarModeloImport()">Baixar modelo</button>
@@ -160,15 +163,17 @@
         <div class="filters">
           <div><label>De</label><input id="fDe" type="date" onchange="carregar()"></div>
           <div><label>Até</label><input id="fAte" type="date" onchange="carregar()"></div>
+          <div><label>Projeto</label><select id="fProj" onchange="onFiltroProjChange()"><option value="">Todos</option></select></div>
+          <div><label>Setor</label><select id="fSetor" onchange="aplicar()"><option value="">Todos</option></select></div>
           <div><label>Médico</label><select id="fMedico" onchange="aplicar()"><option value="">Todos</option></select></div>
         </div>
         <div style="overflow:auto">
           <table class="lanctbl">
             <thead><tr>
-              <th>Código</th><th>Médico</th><th>Paciente</th><th>Procedimento</th>
+              <th>Código</th><th>Médico</th><th>Projeto/Setor</th><th>Paciente</th><th>Procedimento</th>
               <th class="fat-only num">Faturamento</th><th class="num">Repasse</th><th>Data</th><th>Foto</th>
             </tr></thead>
-            <tbody id="tbody"><tr><td colspan="8" class="empty">Carregando…</td></tr></tbody>
+            <tbody id="tbody"><tr><td colspan="9" class="empty">Carregando…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -189,6 +194,8 @@
           </div>
           <div><label>De</label><input id="relDe" type="date"></div>
           <div><label>Até</label><input id="relAte" type="date"></div>
+          <div><label>Projeto</label><select id="relProj" onchange="onRelProjChange()"><option value="">Todos</option></select></div>
+          <div><label>Setor</label><select id="relSetor"><option value="">Todos</option></select></div>
           <div><label>Médico</label><select id="relMed"><option value="">Todos</option></select></div>
           <div class="actions">
             <button class="btn btn-ghost" onclick="verRelatorio()">Ver relatório</button>
@@ -199,14 +206,33 @@
       </div>
     </div>
 
+    <!-- PROJETOS / SETORES -->
+    <div class="tab hidden" id="tab-proj">
+      <div class="card">
+        <h1 class="title" style="font-size:17px">Novo projeto</h1>
+        <p class="sub">Um projeto agrupa setores (ex.: "Hospital da Lagoa" → "Cirurgia geral").</p>
+        <div class="filters">
+          <div><label>Nome do projeto</label><input id="projNome" type="text" placeholder="Ex.: Hospital da Lagoa"></div>
+          <div class="actions"><button class="btn btn-green" onclick="criarProjeto()">Criar projeto</button></div>
+        </div>
+        <div id="projErro" class="err hidden"></div>
+      </div>
+      <div id="listaProjetos"></div>
+    </div>
+
     <!-- PROCEDIMENTOS -->
     <div class="tab hidden" id="tab-proc">
       <div class="card">
         <h1 class="title" style="font-size:17px">Catálogo de procedimentos</h1>
-        <p class="sub">Nome que o médico seleciona, faturamento da empresa e repasse ao médico.</p>
+        <p class="sub">Cada setor de cada projeto tem seus próprios procedimentos, com faturamento e repasse específicos.</p>
+        <div class="filters">
+          <div><label>Projeto</label><select id="pProj" onchange="onProcProjChange()"></select></div>
+          <div><label>Setor</label><select id="pSetor" onchange="renderProc()"></select></div>
+        </div>
+        <div style="border-top:1px solid var(--line);margin:4px 0 14px"></div>
         <div class="filters">
           <div><label>Nome</label><input id="pNome" type="text" placeholder="Nome do procedimento"></div>
-          <div><label>Faturamento (R$)</label><input id="pFat" type="number" step="0.01" placeholder="0,00"></div>
+          <div class="fat-only"><label>Faturamento (R$)</label><input id="pFat" type="number" step="0.01" placeholder="0,00"></div>
           <div><label>Repasse (R$)</label><input id="pRep" type="number" step="0.01" placeholder="0,00"></div>
           <div class="actions">
             <button class="btn btn-green" id="pBtn" onclick="salvarProc()">Adicionar</button>
@@ -216,7 +242,7 @@
         <div id="pErro" class="err hidden"></div>
         <div style="overflow:auto">
           <table class="hm">
-            <thead><tr><th>Procedimento</th><th class="num">Faturamento</th><th class="num">Repasse</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Procedimento</th><th class="num fat-only">Faturamento</th><th class="num">Repasse</th><th>Status</th><th></th></tr></thead>
             <tbody id="procBody"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
           </table>
         </div>
@@ -243,6 +269,11 @@
 <div id="editM" class="modal hidden">
   <div class="modal-card">
     <h2 id="edTitulo">Editar cadastro</h2>
+    <div id="edSetoresWrap" class="edf full hidden" style="margin-bottom:12px;background:var(--brand-l);border:1px solid #cfe3c5;border-radius:12px;padding:12px 14px">
+      <label style="color:var(--brand-d)">Setores habilitados para lançar</label>
+      <p class="sub" style="margin:0 0 8px;font-size:12px">Marque em quais setores este médico pode fazer lançamentos.</p>
+      <div id="edSetoresBox"></div>
+    </div>
     <div class="edgrid">
       <div class="edf"><label>Nome</label><input id="edNome" type="text"></div>
       <div class="edf"><label>CRM</label><div style="display:flex;gap:8px"><select id="edUf" style="flex:0 0 90px"></select><input id="edCrm" type="text"></div></div>
@@ -317,7 +348,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.07.06 · medvia-3';
+const APP_VERSION='2026.11.03 · medvia-4';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -330,6 +361,10 @@ function ultimoDiaMes(){ const n=new Date(); return isoLocal(new Date(n.getFullY
 
 let EU=null, EH_OPERADOR=false, PODE_GERENCIAR=false;
 let medicos=[], procsCat=[], todos=[], cadDados=[], cadView='medicos', cadBusca='', cadPagina=0;
+let projetos=[], setores=[];
+const nomeSetor = id => { const s=setores.find(x=>x.id===id); if(!s) return '—'; const p=projetos.find(x=>x.id===s.projeto_id); return (p?p.nome:'?')+' · '+s.nome; };
+function setoresDoProjeto(projId){ return setores.filter(s=> !projId || s.projeto_id===projId); }
+function optsSetor(projId, incluirTodos){ return (incluirTodos?'<option value="">Todos</option>':'')+setoresDoProjeto(projId).map(s=>`<option value="${s.id}">${s.nome}</option>`).join(''); }
 const CADPAG=20;
 
 /* ---------- auth ---------- */
@@ -357,10 +392,115 @@ async function iniciar(){
   $('fDe').value=primeiroDiaMes(); $('fAte').value=ultimoDiaMes();
   $('relDe').value=primeiroDiaMes(); $('relAte').value=ultimoDiaMes();
   await carregarMedicos();
+  await carregarProjetosSetores();
   await carregarProcedimentos();
   await carregar();
   await verificarPendentes();
   showTab('home');
+}
+
+/* ---------- projetos / setores ---------- */
+async function carregarProjetosSetores(){
+  const [{data:pj},{data:st}] = await Promise.all([
+    sb.from('projetos').select('*').order('nome'),
+    sb.from('setores').select('*').order('nome')
+  ]);
+  projetos = pj||[]; setores = st||[];
+  preencherSeletoresProjeto();
+}
+function preencherSeletoresProjeto(){
+  // selects de PROJETO (com "Todos" nos filtros)
+  const optProjTodos = '<option value="">Todos</option>'+projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  const optProjPuro  = projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  ['fProj','relProj'].forEach(id=>{ const s=$(id); if(s){ const v=s.value; s.innerHTML=optProjTodos; s.value=v; } });
+  ['pProj','impProj'].forEach(id=>{ const s=$(id); if(s){ const v=s.value; s.innerHTML=optProjPuro; if([...s.options].some(o=>o.value===v)) s.value=v; } });
+  // selects de SETOR dependentes
+  const fS=$('fSetor'); if(fS){ fS.innerHTML=optsSetor($('fProj')?.value||'', true); }
+  const rS=$('relSetor'); if(rS){ rS.innerHTML=optsSetor($('relProj')?.value||'', true); }
+  const pS=$('pSetor'); if(pS){ pS.innerHTML=optsSetor($('pProj')?.value||'', false); }
+  const iS=$('impSetor'); if(iS){ iS.innerHTML=optsSetor($('impProj')?.value||'', false); }
+}
+function onFiltroProjChange(){ $('fSetor').innerHTML=optsSetor($('fProj').value,true); aplicar(); }
+function onRelProjChange(){ $('relSetor').innerHTML=optsSetor($('relProj').value,true); }
+function onProcProjChange(){ $('pSetor').innerHTML=optsSetor($('pProj').value,false); cancelarProc(); renderProc(); }
+function onImpProjChange(){ $('impSetor').innerHTML=optsSetor($('impProj').value,false); }
+
+function criarProjeto(){
+  $('projErro').classList.add('hidden');
+  const nome=$('projNome').value.trim();
+  if(!nome) return projErro('Informe o nome do projeto.');
+  sb.from('projetos').insert({nome}).select().single().then(async ({data,error})=>{
+    if(error) return projErro('Erro: '+error.message);
+    $('projNome').value='';
+    await carregarProjetosSetores(); renderProjetos();
+  });
+}
+function projErro(m){ $('projErro').textContent=m; $('projErro').classList.remove('hidden'); }
+async function criarSetor(projId){
+  const inp=$('novoSetor_'+projId); const nome=(inp?.value||'').trim();
+  if(!nome) return alert('Informe o nome do setor.');
+  const {error}=await sb.from('setores').insert({projeto_id:projId, nome});
+  if(error) return alert('Erro: '+error.message);
+  await carregarProjetosSetores(); renderProjetos();
+}
+async function renomearProjeto(id){
+  const p=projetos.find(x=>x.id===id); if(!p) return;
+  const nome=prompt('Novo nome do projeto:', p.nome); if(nome===null) return;
+  if(!nome.trim()) return;
+  const {error}=await sb.from('projetos').update({nome:nome.trim()}).eq('id',id);
+  if(error) return alert('Erro: '+error.message);
+  await carregarProjetosSetores(); renderProjetos();
+}
+async function toggleProjeto(id,novo){
+  const v=(novo===true||novo==='true');
+  const {error}=await sb.from('projetos').update({ativo:v}).eq('id',id);
+  if(error) return alert('Erro: '+error.message);
+  await carregarProjetosSetores(); renderProjetos();
+}
+async function renomearSetor(id){
+  const s=setores.find(x=>x.id===id); if(!s) return;
+  const nome=prompt('Novo nome do setor:', s.nome); if(nome===null) return;
+  if(!nome.trim()) return;
+  const {error}=await sb.from('setores').update({nome:nome.trim()}).eq('id',id);
+  if(error) return alert('Erro: '+error.message);
+  await carregarProjetosSetores(); renderProjetos();
+}
+async function toggleSetor(id,novo){
+  const v=(novo===true||novo==='true');
+  const {error}=await sb.from('setores').update({ativo:v}).eq('id',id);
+  if(error) return alert('Erro: '+error.message);
+  await carregarProjetosSetores(); renderProjetos();
+}
+function renderProjetos(){
+  const box=$('listaProjetos');
+  if(!projetos.length){ box.innerHTML='<div class="card"><div class="empty">Nenhum projeto. Crie o primeiro acima.</div></div>'; return; }
+  box.innerHTML=projetos.map(p=>{
+    const sets=setores.filter(s=>s.projeto_id===p.id);
+    const linhasSet = sets.length ? sets.map(s=>`
+      <div class="medrow" style="padding:9px 0">
+        <div class="info"><div class="nm">${s.nome} ${s.ativo?'<span class="badge2 on">Ativo</span>':'<span class="badge2 off">Inativo</span>'}</div>
+          <div class="meta">${procsCat.filter(pr=>pr.setor_id===s.id).length} procedimento(s)</div></div>
+        <div class="medacts" style="flex-basis:300px;grid-template-columns:1fr 1fr">
+          <button class="sbtn" onclick="renomearSetor('${s.id}')">Renomear</button>
+          <button class="sbtn ${s.ativo?'warn':'go'}" onclick="toggleSetor('${s.id}',${s.ativo?'false':'true'})">${s.ativo?'Inativar':'Ativar'}</button>
+        </div>
+      </div>`).join('') : '<div class="empty" style="padding:14px">Nenhum setor ainda.</div>';
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <h1 class="title" style="font-size:17px;margin:0">${p.nome}</h1>
+        ${p.ativo?'<span class="badge2 on">Ativo</span>':'<span class="badge2 off">Inativo</span>'}
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="sbtn" onclick="renomearProjeto('${p.id}')">Renomear</button>
+          <button class="sbtn ${p.ativo?'warn':'go'}" onclick="toggleProjeto('${p.id}',${p.ativo?'false':'true'})">${p.ativo?'Inativar':'Ativar'}</button>
+        </div>
+      </div>
+      ${linhasSet}
+      <div class="filters" style="margin-top:12px;margin-bottom:0">
+        <div><label>Novo setor</label><input id="novoSetor_${p.id}" type="text" placeholder="Ex.: Cirurgia geral"></div>
+        <div class="actions"><button class="btn btn-ghost" onclick="criarSetor('${p.id}')">Adicionar setor</button></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function showTab(t){
@@ -369,6 +509,7 @@ function showTab(t){
   $('tab-'+t).classList.remove('hidden');
   if(t==='home') renderHome();
   if(t==='cad'){ carregarListaMedicos(); }
+  if(t==='proj') renderProjetos();
   if(t==='proc') renderProc();
 }
 
@@ -481,7 +622,27 @@ async function editarMedico(id){
   $('edBanco').value=data.banco||''; $('edAgencia').value=data.agencia||''; $('edConta').value=data.conta||''; $('edCpfCnpj').value=data.cpf_cnpj||'';
   trocarFormaPgto();
   $('btnExcluir').classList.toggle('hidden', !(PODE_GERENCIAR && id!==EU.id && !data.is_master));
+  const ehMedico = (data.papel==='medico');
+  $('edSetoresWrap').classList.toggle('hidden', !ehMedico);
+  if(ehMedico){
+    $('edSetoresBox').innerHTML='<div class="sub" style="margin:0">Carregando…</div>';
+    const {data:ms}=await sb.from('medico_setores').select('setor_id').eq('medico_id',id);
+    renderEdSetores((ms||[]).map(x=>x.setor_id));
+  }
   $('editM').classList.remove('hidden');
+}
+function renderEdSetores(selIds){
+  const sel=new Set(selIds||[]); const box=$('edSetoresBox');
+  if(!projetos.length){ box.innerHTML='<div class="sub" style="margin:0">Nenhum projeto cadastrado (aba Projetos).</div>'; return; }
+  const projVis=projetos.filter(p=> p.ativo || setores.some(s=>s.projeto_id===p.id && sel.has(s.id)));
+  const html=projVis.map(p=>{
+    const sets=setores.filter(s=>s.projeto_id===p.id && (s.ativo || sel.has(s.id)));
+    if(!sets.length) return '';
+    return `<div style="margin-bottom:8px"><div style="font-weight:700;color:var(--brand-d);font-size:13px;margin-bottom:4px">${p.nome}</div>`+
+      sets.map(s=>`<label style="display:inline-flex;align-items:center;gap:6px;font-weight:500;margin:0 14px 6px 0"><input type="checkbox" class="edSetChk" value="${s.id}" ${sel.has(s.id)?'checked':''} style="width:auto"> ${s.nome}${s.ativo?'':' (inativo)'}</label>`).join('')+
+      `</div>`;
+  }).join('');
+  box.innerHTML = html || '<div class="sub" style="margin:0">Nenhum setor disponível.</div>';
 }
 async function salvarEdicaoMedico(){
   $('edErro').classList.add('hidden');
@@ -495,6 +656,11 @@ async function salvarEdicaoMedico(){
     banco:$('edBanco').value.trim()||null, agencia:$('edAgencia').value.trim()||null, conta:$('edConta').value.trim()||null, cpf_cnpj:$('edCpfCnpj').value.trim()||null };
   const {error}=await sb.from('medicos').update(upd).eq('id',edId);
   if(error){ $('edErro').textContent='Erro: '+error.message; $('edErro').classList.remove('hidden'); return; }
+  if(!$('edSetoresWrap').classList.contains('hidden')){
+    const ids=[...document.querySelectorAll('.edSetChk:checked')].map(c=>c.value);
+    const {error:eSet}=await sb.rpc('set_medico_setores',{p_medico:edId, p_setores:ids});
+    if(eSet){ $('edErro').textContent='Dados salvos, mas erro ao gravar setores: '+eSet.message; $('edErro').classList.remove('hidden'); return; }
+  }
   fecharEdicao(); carregarListaMedicos(); carregarMedicos();
 }
 async function excluirCadastro(){
@@ -510,11 +676,16 @@ async function carregarProcedimentos(){
   const {data}=await sb.from('procedimentos').select('*').order('nome');
   procsCat=data||[];
 }
+function setorSelecionadoProc(){ return $('pSetor')?.value||''; }
 function renderProc(){
   const body=$('procBody');
-  if(!procsCat.length){ body.innerHTML='<tr><td colspan="5" class="empty">Nenhum procedimento.</td></tr>'; return; }
-  body.innerHTML=procsCat.map(p=>`<tr>
-    <td>${p.nome}</td><td class="num">${brl(p.valor_faturamento)}</td><td class="num">${brl(p.repasse)}</td>
+  const setorId=setorSelecionadoProc();
+  if(!projetos.length){ body.innerHTML='<tr><td colspan="5" class="empty">Crie um projeto e um setor primeiro (aba Projetos).</td></tr>'; return; }
+  if(!setorId){ body.innerHTML='<tr><td colspan="5" class="empty">Selecione o setor acima.</td></tr>'; return; }
+  const arr=procsCat.filter(p=>p.setor_id===setorId);
+  if(!arr.length){ body.innerHTML='<tr><td colspan="5" class="empty">Nenhum procedimento neste setor.</td></tr>'; return; }
+  body.innerHTML=arr.map(p=>`<tr>
+    <td>${p.nome}</td><td class="num fat-only">${brl(p.valor_faturamento)}</td><td class="num">${brl(p.repasse)}</td>
     <td>${p.ativo?'<span class="badge2 on">Ativo</span>':'<span class="badge2 off">Inativo</span>'}</td>
     <td style="white-space:nowrap">
       <button class="sbtn" onclick="editarProc('${p.id}')">Editar</button>
@@ -523,19 +694,26 @@ function renderProc(){
 }
 async function salvarProc(){
   $('pErro').classList.add('hidden');
-  const nome=$('pNome').value.trim(), fat=parseFloat($('pFat').value), rep=parseFloat($('pRep').value);
+  const setorId=setorSelecionadoProc();
+  if(!setorId) return showPErro('Escolha o projeto e o setor deste procedimento.');
+  const nome=$('pNome').value.trim(), rep=parseFloat($('pRep').value);
+  let fat=parseFloat($('pFat').value);
+  if(isNaN(fat)){ if(EH_OPERADOR){ fat = procEdit ? Number(procsCat.find(x=>x.id===procEdit)?.valor_faturamento||0) : 0; } }
   if(!nome) return showPErro('Informe o nome do procedimento.');
-  if(isNaN(fat)||isNaN(rep)) return showPErro('Informe faturamento e repasse.');
+  if(isNaN(rep)) return showPErro('Informe o repasse.');
+  if(isNaN(fat) && !EH_OPERADOR) return showPErro('Informe o faturamento.');
   let error;
-  if(procEdit){ ({error}=await sb.from('procedimentos').update({nome,valor_faturamento:fat,repasse:rep}).eq('id',procEdit)); }
-  else { ({error}=await sb.from('procedimentos').insert({nome,valor_faturamento:fat,repasse:rep})); }
+  if(procEdit){ ({error}=await sb.from('procedimentos').update({nome,valor_faturamento:fat,repasse:rep,setor_id:setorId}).eq('id',procEdit)); }
+  else { ({error}=await sb.from('procedimentos').insert({nome,valor_faturamento:fat,repasse:rep,setor_id:setorId})); }
   if(error) return showPErro('Erro: '+error.message);
   cancelarProc(); await carregarProcedimentos(); renderProc();
 }
 function showPErro(m){ $('pErro').textContent=m; $('pErro').classList.remove('hidden'); }
 function editarProc(id){ const p=procsCat.find(x=>x.id===id); if(!p) return; procEdit=id;
+  const s=setores.find(x=>x.id===p.setor_id);
+  if(s){ $('pProj').value=s.projeto_id; $('pSetor').innerHTML=optsSetor(s.projeto_id,false); $('pSetor').value=s.id; }
   $('pNome').value=p.nome; $('pFat').value=p.valor_faturamento; $('pRep').value=p.repasse;
-  $('pBtn').textContent='Salvar'; $('pCancel').classList.remove('hidden'); window.scrollTo(0,0); }
+  $('pBtn').textContent='Salvar'; $('pCancel').classList.remove('hidden'); window.scrollTo(0,0); renderProc(); }
 function cancelarProc(){ procEdit=null; $('pNome').value=''; $('pFat').value=''; $('pRep').value=''; $('pBtn').textContent='Adicionar'; $('pCancel').classList.add('hidden'); $('pErro').classList.add('hidden'); }
 async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
   const {error}=await sb.from('procedimentos').update({ativo:v}).eq('id',id); if(error) return alert('Erro: '+error.message);
@@ -544,7 +722,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -552,16 +730,24 @@ async function carregar(){
   renderLanc();
 }
 function aplicar(){ renderLanc(); }
-function filtrados(){ const m=$('fMedico').value; return m ? todos.filter(l=>l.medico_id===m) : todos; }
+function filtrados(){
+  const m=$('fMedico').value, proj=$('fProj')?.value||'', set=$('fSetor')?.value||'';
+  return todos.filter(l=>{
+    if(m && l.medico_id!==m) return false;
+    if(set && l.setor_id!==set) return false;
+    if(proj && (l.setores?.projeto_id||'')!==proj) return false;
+    return true;
+  });
+}
 function renderLanc(){
   const tb=$('tbody'); const dados=filtrados();
-  if(!dados.length){ tb.innerHTML='<tr><td colspan="8" class="empty">Nenhum lançamento.</td></tr>'; return; }
+  if(!dados.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Nenhum lançamento.</td></tr>'; return; }
   tb.innerHTML=dados.map(l=>{
     const it=(l.lancamento_itens||[])[0]||{};
     const foto = l.foto_path ? `<span class="foto" onclick="verFoto('${l.foto_path}')">Ver</span> · <span class="foto" onclick="baixarFoto('${l.foto_path}','${l.codigo_interno||'foto'}')">Baixar</span>` : '—';
     return `<tr>
       <td class="codigo">${l.codigo_interno||'—'}<div style="margin-top:6px"><span class="foto" onclick="abrirEditarLanc('${l.id}')">Editar</span></div></td>
-      <td>${l.medicos?.nome||'—'}</td><td>${l.paciente_nome||'—'}</td><td>${it.nome||'—'}</td>
+      <td>${l.medicos?.nome||'—'}</td><td>${nomeSetor(l.setor_id)}</td><td>${l.paciente_nome||'—'}</td><td>${it.nome||'—'}</td>
       <td class="fat-only num">${brl(it.valor_faturamento)}</td><td class="num">${brl(it.repasse)}</td>
       <td>${fmtData(l.criado_em)}</td><td>${foto}</td></tr>`;
   }).join('');
@@ -575,14 +761,16 @@ async function baixarFoto(path,nome){ const {data}=await sb.storage.from('fotos'
 let elLancId=null;
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
-  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,lancamento_itens(procedimento_id)').eq('id',id).single();
+  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,setor_id,lancamento_itens(procedimento_id)').eq('id',id).single();
   if(error||!data) return alert('Erro ao abrir.');
   elLancId=id;
-  $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'');
+  $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||'';
   const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
-  $('elProc').innerHTML=procsCat.filter(p=>p.ativo).map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-  const it=(data.lancamento_itens||[])[0]||{}; if(it.procedimento_id) $('elProc').value=it.procedimento_id;
+  const it=(data.lancamento_itens||[])[0]||{};
+  const doSetor=procsCat.filter(p=>p.setor_id===data.setor_id && (p.ativo || p.id===it.procedimento_id));
+  $('elProc').innerHTML=doSetor.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  if(it.procedimento_id) $('elProc').value=it.procedimento_id;
   $('editLancM').classList.remove('hidden');
 }
 async function salvarEditarLanc(){
@@ -608,7 +796,7 @@ function baixarModeloImport(){
 function _norm(s){ return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase(); }
 function _digitos(s){ return String(s||'').replace(/\D/g,''); }
 function acharMed(crm){ const alvo=_digitos(crm); return medicos.find(m=>_norm(m.crm)===_norm(crm) || _digitos(m.crm)===alvo); }
-function acharProc(nome){ const n=_norm(nome); return procsCat.find(p=>_norm(p.nome)===n); }
+function acharProc(nome, setorId){ const n=_norm(nome); return procsCat.find(p=>_norm(p.nome)===n && (!setorId || p.setor_id===setorId)); }
 function parseDataImp(v){
   if(v instanceof Date) return isoLocal(v);
   const s=String(v||'').trim();
@@ -618,6 +806,8 @@ function parseDataImp(v){
 }
 async function lerImport(){
   $('impErro').classList.add('hidden'); $('btnGravarLote').classList.add('hidden'); loteParaGravar=[];
+  const setorId=$('impSetor')?.value||'';
+  if(!setorId){ return impErro('Escolha o projeto e o setor dos lançamentos antes de importar.'); }
   const f=$('impFile').files[0]; if(!f){ return impErro('Escolha um arquivo .xlsx.'); }
   const buf=await f.arrayBuffer(); const wb=XLSX.read(buf,{type:'array',cellDates:true});
   const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
@@ -626,15 +816,15 @@ async function lerImport(){
     const r=rows[i]; if(!r || r.every(c=>String(c).trim()==='')) continue;
     const dataISO=parseDataImp(r[0]); const pac=String(r[1]||'').trim(); const crm=String(r[2]||'').trim(); const procNome=String(r[3]||'').trim();
     if(!dataISO && !pac && !crm && !procNome) continue;
-    const med=acharMed(crm); const pr=acharProc(procNome);
+    const med=acharMed(crm); const pr=acharProc(procNome, setorId);
     if(!dataISO) pend.push(`Linha ${i+1}: data inválida ("${r[0]}")`);
     if(!med) pend.push(`Linha ${i+1}: CRM sem cadastro ("${crm}")`);
-    if(!pr) pend.push(`Linha ${i+1}: procedimento fora do catálogo ("${procNome}")`);
+    if(!pr) pend.push(`Linha ${i+1}: procedimento fora do catálogo deste setor ("${procNome}")`);
     if(dataISO&&med&&pr) linhas.push({dataISO,pac:pac||'—',med,pr});
   }
   if(pend.length){ impErro('Corrija os itens abaixo (nada é gravado enquanto houver pendências):<br>'+pend.join('<br>')); $('impPreviewWrap').innerHTML=''; $('impResumo').textContent=''; return; }
   if(!linhas.length){ impErro('Nenhuma linha válida encontrada.'); return; }
-  loteParaGravar=linhas.map(x=>({medico_id:x.med.id, paciente:x.pac, data:x.dataISO+'T12:00:00', procedimento_id:x.pr.id}));
+  loteParaGravar=linhas.map(x=>({medico_id:x.med.id, setor_id:setorId, paciente:x.pac, data:x.dataISO+'T12:00:00', procedimento_id:x.pr.id}));
   let tot=0;
   $('impPreviewWrap').innerHTML=`<table class="prev"><thead><tr><th>Data</th><th>Paciente</th><th>Médico</th><th>Procedimento</th><th class="fat-only num">Faturamento</th><th class="num">Repasse</th></tr></thead><tbody>`+
     linhas.map(x=>{ tot+=Number(x.pr.repasse||0); return `<tr><td>${x.dataISO.split('-').reverse().join('/')}</td><td>${x.pac}</td><td>${x.med.nome}</td><td>${x.pr.nome}</td><td class="fat-only num">${brl(x.pr.valor_faturamento)}</td><td class="num">${brl(x.pr.repasse)}</td></tr>`; }).join('')+
@@ -673,11 +863,14 @@ function renderHome(){
 /* ---------- RELATÓRIOS ---------- */
 function dadosRel(){
   const de=$('relDe').value, ate=$('relAte').value, med=$('relMed').value;
+  const proj=$('relProj')?.value||'', set=$('relSetor')?.value||'';
   return todos.filter(l=>{
     const d=new Date(l.criado_em);
     if(de && d < new Date(de+'T00:00:00')) return false;
     if(ate && d > new Date(ate+'T23:59:59.999')) return false;
     if(med && l.medico_id!==med) return false;
+    if(set && l.setor_id!==set) return false;
+    if(proj && (l.setores?.projeto_id||'')!==proj) return false;
     return true;
   }).slice().sort((a,b)=>new Date(a.criado_em)-new Date(b.criado_em));
 }
