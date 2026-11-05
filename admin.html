@@ -110,7 +110,7 @@
   <header><b>MedVia — Painel administrativo</b><button class="ghost" onclick="logout()">Sair</button></header>
   <nav class="tabs">
     <button class="tab-btn on" data-t="home" onclick="showTab('home')">Home</button>
-    <button class="tab-btn" data-t="cal" id="btnCal" onclick="showTab('cal')" style="display:none">Calendário</button>
+    <button class="tab-btn" data-t="escala" onclick="showTab('escala')">Escala</button>
     <button class="tab-btn" data-t="lanc" onclick="showTab('lanc')">Lançamentos</button>
     <button class="tab-btn" data-t="rel" onclick="showTab('rel')">Relatórios</button>
     <button class="tab-btn" data-t="proj" onclick="showTab('proj')">Projetos</button>
@@ -138,7 +138,45 @@
     </div>
 
     <!-- CALENDÁRIO (adormecido) -->
-    <div class="tab hidden" id="tab-cal"><div class="card"><p class="sub" style="margin:0">Calendário desativado neste sistema.</p></div></div>
+    <!-- ESCALA -->
+    <div class="tab hidden" id="tab-escala">
+      <div class="card">
+        <h1 class="title" style="font-size:17px">Lançar escala</h1>
+        <p class="sub">Escolha o médico, (opcional) projeto/setor e horário, adicione os dias e salve. Controle interno.</p>
+        <div class="filters">
+          <div><label>Médico</label><select id="eMed"></select></div>
+          <div><label>Projeto (opcional)</label><select id="eProj" onchange="onEscProjChange()"><option value="">—</option></select></div>
+          <div><label>Setor (opcional)</label><select id="eSetor"><option value="">—</option></select></div>
+        </div>
+        <div class="filters">
+          <div><label>Hora início (opcional)</label><input id="eHi" type="time"></div>
+          <div><label>Hora fim (opcional)</label><input id="eHf" type="time"></div>
+          <div><label>Observação (opcional)</label><input id="eObs" type="text" placeholder="Ex.: Sobreaviso"></div>
+        </div>
+        <div class="filters">
+          <div><label>Dia</label><input id="eData" type="date"></div>
+          <div class="actions"><button class="btn btn-ghost" onclick="adicionarDataEscala()">Adicionar dia</button></div>
+        </div>
+        <div id="eChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px"></div>
+        <div id="eErro" class="err hidden"></div>
+        <button class="btn btn-green" onclick="salvarEscala()">Salvar escala</button>
+      </div>
+
+      <div class="card">
+        <h1 class="title" style="font-size:17px">Escalas lançadas</h1>
+        <div class="filters">
+          <div><label>Mês</label><input id="efMes" type="month" onchange="carregarEscalas()"></div>
+          <div><label>Médico</label><select id="efMed" onchange="carregarEscalas()"><option value="">Todos</option></select></div>
+          <div><label>Projeto</label><select id="efProj" onchange="carregarEscalas()"><option value="">Todos</option></select></div>
+        </div>
+        <div style="overflow:auto">
+          <table class="hm">
+            <thead><tr><th>Data</th><th>Médico</th><th>Projeto/Setor</th><th>Horário</th><th>Obs.</th><th></th></tr></thead>
+            <tbody id="escBody"><tr><td colspan="6" class="empty">Selecione o mês.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
     <!-- LANÇAMENTOS -->
     <div class="tab hidden" id="tab-lanc">
@@ -360,7 +398,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.03 · medvia-6';
+const APP_VERSION='2026.11.05 · medvia-7';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -523,6 +561,77 @@ function showTab(t){
   if(t==='cad'){ carregarListaMedicos(); }
   if(t==='proj') renderProjetos();
   if(t==='proc') renderProc();
+  if(t==='escala') abrirEscalaTab();
+}
+
+/* ---------- ESCALA ---------- */
+let escalaDatas=[];
+function abrirEscalaTab(){
+  const optMed=medicos.filter(m=>m.papel==='medico').map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  $('eMed').innerHTML='<option value="">Selecione…</option>'+optMed;
+  $('efMed').innerHTML='<option value="">Todos</option>'+optMed;
+  const optProj=projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  $('eProj').innerHTML='<option value="">—</option>'+optProj;
+  $('efProj').innerHTML='<option value="">Todos</option>'+optProj;
+  $('eSetor').innerHTML='<option value="">—</option>';
+  if(!$('efMes').value){ const d=new Date(); $('efMes').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+  carregarEscalas();
+}
+function onEscProjChange(){ $('eSetor').innerHTML='<option value="">—</option>'+optsSetor($('eProj').value,false); }
+function adicionarDataEscala(){
+  const d=$('eData').value; if(!d) return;
+  if(!escalaDatas.includes(d)) escalaDatas.push(d);
+  escalaDatas.sort(); $('eData').value=''; renderChipsEscala();
+}
+function removerDataEscala(d){ escalaDatas=escalaDatas.filter(x=>x!==d); renderChipsEscala(); }
+function renderChipsEscala(){
+  $('eChips').innerHTML = escalaDatas.length
+    ? escalaDatas.map(d=>`<span style="background:var(--brand-l);border:1px solid #cfe3c5;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:600;color:var(--brand-d)">${d.split('-').reverse().join('/')} <a onclick="removerDataEscala('${d}')" style="cursor:pointer;color:#c0392b;margin-left:4px">✕</a></span>`).join('')
+    : '<span class="sub" style="margin:0">Nenhum dia adicionado ainda.</span>';
+}
+async function salvarEscala(){
+  $('eErro').classList.add('hidden');
+  const med=$('eMed').value;
+  if(!med) return escErro('Selecione o médico.');
+  if($('eData').value && !escalaDatas.includes($('eData').value)) escalaDatas.push($('eData').value);
+  if(!escalaDatas.length) return escErro('Adicione pelo menos um dia.');
+  const setor=$('eSetor').value||null, hi=$('eHi').value||null, hf=$('eHf').value||null, obs=$('eObs').value.trim()||null;
+  const rows=escalaDatas.map(d=>({medico_id:med, setor_id:setor, data:d, hora_inicio:hi, hora_fim:hf, observacao:obs}));
+  const {error}=await sb.from('escalas').insert(rows);
+  if(error) return escErro('Erro: '+error.message);
+  escalaDatas=[]; renderChipsEscala();
+  $('eHi').value=''; $('eHf').value=''; $('eObs').value=''; $('eData').value='';
+  carregarEscalas();
+}
+function escErro(m){ $('eErro').textContent=m; $('eErro').classList.remove('hidden'); }
+async function carregarEscalas(){
+  const mes=$('efMes').value; const body=$('escBody');
+  if(!mes){ body.innerHTML='<tr><td colspan="6" class="empty">Selecione o mês.</td></tr>'; return; }
+  const [y,m]=mes.split('-').map(Number);
+  const ini=`${mes}-01`; const fimD=new Date(y,m,0).getDate(); const fim=`${mes}-${String(fimD).padStart(2,'0')}`;
+  let q=sb.from('escalas').select('id,data,hora_inicio,hora_fim,observacao,medico_id,setor_id,medicos:medico_id(nome),setores:setor_id(nome,projeto_id)')
+    .gte('data',ini).lte('data',fim).order('data');
+  if($('efMed').value) q=q.eq('medico_id',$('efMed').value);
+  const {data,error}=await q;
+  if(error){ body.innerHTML='<tr><td colspan="6" class="empty">Erro ao carregar.</td></tr>'; return; }
+  let arr=data||[];
+  const fp=$('efProj').value; if(fp) arr=arr.filter(e=>e.setores&&e.setores.projeto_id===fp);
+  if(!arr.length){ body.innerHTML='<tr><td colspan="6" class="empty">Nenhuma escala no mês.</td></tr>'; return; }
+  body.innerHTML=arr.map(e=>{
+    const hor=(e.hora_inicio||e.hora_fim)?`${e.hora_inicio||''}${e.hora_fim?'–'+e.hora_fim:''}`:'—';
+    return `<tr>
+      <td>${e.data.split('-').reverse().join('/')}</td>
+      <td>${e.medicos?.nome||'—'}</td>
+      <td>${e.setor_id?nomeSetor(e.setor_id):'—'}</td>
+      <td>${hor}</td><td>${e.observacao||'—'}</td>
+      <td><button class="sbtn warn" onclick="excluirEscala('${e.id}')">Excluir</button></td></tr>`;
+  }).join('');
+}
+async function excluirEscala(id){
+  if(!confirm('Excluir esta escala?')) return;
+  const {error}=await sb.from('escalas').delete().eq('id',id);
+  if(error) return alert('Erro: '+error.message);
+  carregarEscalas();
 }
 
 /* ---------- pendentes ---------- */
