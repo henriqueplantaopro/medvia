@@ -304,7 +304,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.05 · medvia-7';
+const APP_VERSION = '2026.11.05 · medvia-8';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
@@ -353,7 +353,8 @@ function goHome(){ ['viewNovo','viewOk','viewDados','viewEscala'].forEach(v=>$(v
 let escalasMed=[], escMesData=new Date(), escModo='cal';
 const DOW_ESC=['D','S','T','Q','Q','S','S'];
 function ymd(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
-function escSetorLabel(e){ if(!e.setores) return ''; const p=e.setores.projetos?.nome; return (p?p+' · ':'')+e.setores.nome; }
+function escSetorLabel(e){ const proj=e.projetos?.nome||''; const setor=e.setores?.nome||'';
+  return (proj&&setor) ? proj+' · '+setor : (proj||setor||''); }
 function escHora(e){ return (e.hora_inicio||e.hora_fim)?`${e.hora_inicio||''}${e.hora_fim?'–'+e.hora_fim:''}`:'Plantão'; }
 async function abrirEscala(){
   ['viewNovo','viewOk','viewDados','viewHome'].forEach(v=>$(v).classList.add('hidden'));
@@ -364,7 +365,7 @@ async function abrirEscala(){
 }
 async function carregarEscalasMed(){
   const {data,error}=await sb.from('escalas')
-    .select('id,data,hora_inicio,hora_fim,observacao,setor_id,setores:setor_id(nome,projetos:projeto_id(nome))')
+    .select('id,data,hora_inicio,hora_fim,observacao,setor_id,projeto_id,projetos:projeto_id(nome),setores:setor_id(nome)')
     .eq('medico_id',perfil.id).order('data');
   escalasMed = error ? [] : (data||[]);
 }
