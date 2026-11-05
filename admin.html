@@ -85,6 +85,32 @@
   .ver-stamp{position:fixed;right:8px;bottom:7px;font-size:10px;color:#8aa2a5;z-index:5;pointer-events:none;background:rgba(255,255,255,.72);padding:1px 7px;border-radius:6px}
   .err{color:var(--red);font-size:14px;margin-top:10px}
   body.operador .fat-only{display:none!important}
+  /* escala / calendário */
+  .esc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .esc-modos{display:flex;gap:4px;background:var(--bg);padding:4px;border-radius:10px}
+  .emb{border:0;background:transparent;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted)}
+  .emb.on{background:var(--brand);color:#fff}
+  .esc-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .esc-nav strong{margin-right:auto;text-transform:capitalize}
+  .esc-proj{margin-bottom:20px}
+  .esc-proj-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+  .esc-proj-h b{color:var(--brand-d);font-size:15px}
+  .esc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .esc-dcol{min-width:0}
+  .esc-dh{background:var(--brand-d);color:#fff;border-radius:8px 8px 0 0;text-align:center;padding:6px 2px;font-size:11px;font-weight:700;line-height:1.25}
+  .esc-dh small{display:block;font-size:15px;font-weight:800}
+  .esc-cell{border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;min-height:74px;padding:5px;display:flex;flex-direction:column;gap:4px}
+  .esc-cell.hoje{background:#f2f8ef}
+  .esc-chip{background:var(--brand-l);border:1px solid #cfe3c5;border-radius:7px;padding:3px 6px;font-size:11.5px;font-weight:600;color:var(--brand-d);display:flex;justify-content:space-between;gap:4px;align-items:center;min-width:0}
+  .esc-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .esc-chip a{cursor:pointer;color:var(--red);font-weight:800;flex:none}
+  .esc-add{margin-top:auto;border:1px dashed var(--line);background:#fff;border-radius:7px;padding:3px;font-size:15px;color:var(--muted);cursor:pointer;line-height:1.1}
+  .esc-add:hover{border-color:var(--brand);color:var(--brand)}
+  .esc-mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .esc-mcell{border:1px solid var(--line);border-radius:7px;min-height:68px;padding:4px}
+  .esc-mcell .dn{font-weight:700;color:var(--muted);font-size:12px}
+  .esc-mcell.out{background:#f6f8f5;opacity:.55}
+  .esc-mcell.hoje{border-color:var(--brand);border-width:1.5px}
 </style>
 </head>
 <body>
@@ -138,43 +164,36 @@
     </div>
 
     <!-- CALENDÁRIO (adormecido) -->
-    <!-- ESCALA -->
+    <!-- ESCALA (calendário) -->
     <div class="tab hidden" id="tab-escala">
       <div class="card">
-        <h1 class="title" style="font-size:17px">Lançar escala</h1>
-        <p class="sub">Escolha o médico, (opcional) projeto/setor e horário, adicione os dias e salve. Controle interno.</p>
-        <div class="filters">
-          <div><label>Médico</label><select id="eMed"></select></div>
-          <div><label>Projeto (opcional)</label><select id="eProj" onchange="onEscProjChange()"><option value="">—</option></select></div>
-          <div><label>Setor (opcional)</label><select id="eSetor"><option value="">—</option></select></div>
+        <div class="esc-top">
+          <div>
+            <h1 class="title" style="font-size:17px;margin:0">Calendário</h1>
+            <p class="sub" style="margin:3px 0 0">Escala por projeto — clique no + do dia para escalar um médico.</p>
+          </div>
+          <div class="esc-modos">
+            <button id="emSem" class="emb on" onclick="escSetView('sem')">Semanal</button>
+            <button id="emMes" class="emb" onclick="escSetView('mes')">Mensal</button>
+            <button id="emCal" class="emb" onclick="escSetView('cal')">Mês (calendário)</button>
+          </div>
         </div>
-        <div class="filters">
-          <div><label>Hora início (opcional)</label><input id="eHi" type="time"></div>
-          <div><label>Hora fim (opcional)</label><input id="eHf" type="time"></div>
-          <div><label>Observação (opcional)</label><input id="eObs" type="text" placeholder="Ex.: Sobreaviso"></div>
+        <div class="filters" style="margin-top:14px;margin-bottom:0">
+          <div><label>Projeto</label><select id="escfProj" onchange="onEscfProj()"><option value="">Todos os projetos</option></select></div>
+          <div><label>Setor</label><select id="escfSetor" onchange="renderEscala()"><option value="">Todos os setores</option></select></div>
+          <div><label>Médico</label><select id="escfMed" onchange="renderEscala()"><option value="">Todos os médicos</option></select></div>
+          <div class="actions"><button class="btn btn-ghost" onclick="escLimpar()">Limpar</button></div>
         </div>
-        <div class="filters">
-          <div><label>Dia</label><input id="eData" type="date"></div>
-          <div class="actions"><button class="btn btn-ghost" onclick="adicionarDataEscala()">Adicionar dia</button></div>
-        </div>
-        <div id="eChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px"></div>
-        <div id="eErro" class="err hidden"></div>
-        <button class="btn btn-green" onclick="salvarEscala()">Salvar escala</button>
       </div>
 
       <div class="card">
-        <h1 class="title" style="font-size:17px">Escalas lançadas</h1>
-        <div class="filters">
-          <div><label>Mês</label><input id="efMes" type="month" onchange="carregarEscalas()"></div>
-          <div><label>Médico</label><select id="efMed" onchange="carregarEscalas()"><option value="">Todos</option></select></div>
-          <div><label>Projeto</label><select id="efProj" onchange="carregarEscalas()"><option value="">Todos</option></select></div>
+        <div class="esc-nav">
+          <button class="btn btn-ghost" onclick="escNav(-1)">‹ Anterior</button>
+          <strong id="escRange">—</strong>
+          <button class="btn btn-ghost" onclick="escNav(1)">Próxima ›</button>
+          <button class="btn btn-ghost" onclick="escHoje()">Hoje</button>
         </div>
-        <div style="overflow:auto">
-          <table class="hm">
-            <thead><tr><th>Data</th><th>Médico</th><th>Projeto/Setor</th><th>Horário</th><th>Obs.</th><th></th></tr></thead>
-            <tbody id="escBody"><tr><td colspan="6" class="empty">Selecione o mês.</td></tr></tbody>
-          </table>
-        </div>
+        <div id="escCorpo"><div class="empty">Carregando…</div></div>
       </div>
     </div>
 
@@ -389,6 +408,25 @@
   </div>
 </div>
 
+<!-- MODAL ESCALAR -->
+<div id="escAddM" class="modal hidden">
+  <div class="modal-card" style="max-width:420px">
+    <h2 id="escAddTit">Escalar médico</h2>
+    <p class="sub" id="escAddSub" style="margin:-8px 0 14px"></p>
+    <div class="edgrid">
+      <div class="edf full" id="eaProjWrap" style="display:none"><label>Projeto</label><select id="eaProj" onchange="onEaProj()"></select></div>
+      <div class="edf full"><label>Médico</label><select id="eaMed"></select></div>
+      <div class="edf full"><label>Setor (opcional)</label><select id="eaSetor"><option value="">—</option></select></div>
+      <div class="edf full"><label>Observação (opcional)</label><input id="eaObs" type="text" placeholder="Ex.: Sobreaviso"></div>
+    </div>
+    <div id="eaErro" class="err hidden"></div>
+    <div class="ed-acts">
+      <button class="btn btn-green" id="eaBtn" onclick="salvarEscAdd()">Escalar</button>
+      <button class="btn" style="background:var(--line)" onclick="$('escAddM').classList.add('hidden')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL FOTO -->
 <div id="modal" class="modal hidden" onclick="fecharFoto()"><img id="modalImg" style="max-width:92%;max-height:88%;border-radius:10px" alt=""></div>
 
@@ -398,7 +436,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.05 · medvia-7';
+const APP_VERSION='2026.11.05 · medvia-8';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -564,74 +602,125 @@ function showTab(t){
   if(t==='escala') abrirEscalaTab();
 }
 
-/* ---------- ESCALA ---------- */
-let escalaDatas=[];
+/* ---------- ESCALA (calendário) ---------- */
+let escView='sem', escAnchor=new Date(), escalasAdm=[], escAddProj=null, escAddData=null;
+const ESCDOW=['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+function escWeekStart(a){ const d=new Date(a.getFullYear(),a.getMonth(),a.getDate()); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d; }
+function escRangeDatas(){
+  if(escView==='sem'){ const d=escWeekStart(escAnchor); const f=new Date(d); f.setDate(d.getDate()+6); return [d,f]; }
+  const y=escAnchor.getFullYear(), m=escAnchor.getMonth(); return [new Date(y,m,1), new Date(y,m+1,0)];
+}
+function escProjetosVis(){ const f=$('escfProj').value; return projetos.filter(p=>p.ativo && (!f||p.id===f)); }
+function escDe(projId, ds){ const fs=$('escfSetor').value, fm=$('escfMed').value;
+  return escalasAdm.filter(e=> e.projeto_id===projId && e.data===ds && (!fs||e.setor_id===fs) && (!fm||e.medico_id===fm)); }
+
 function abrirEscalaTab(){
   const optMed=medicos.filter(m=>m.papel==='medico').map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
-  $('eMed').innerHTML='<option value="">Selecione…</option>'+optMed;
-  $('efMed').innerHTML='<option value="">Todos</option>'+optMed;
-  const optProj=projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-  $('eProj').innerHTML='<option value="">—</option>'+optProj;
-  $('efProj').innerHTML='<option value="">Todos</option>'+optProj;
-  $('eSetor').innerHTML='<option value="">—</option>';
-  if(!$('efMes').value){ const d=new Date(); $('efMes').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
-  carregarEscalas();
+  $('escfMed').innerHTML='<option value="">Todos os médicos</option>'+optMed;
+  $('escfProj').innerHTML='<option value="">Todos os projetos</option>'+projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  $('escfSetor').innerHTML='<option value="">Todos os setores</option>';
+  escAnchor=new Date(); recarregarEscala();
 }
-function onEscProjChange(){ $('eSetor').innerHTML='<option value="">—</option>'+optsSetor($('eProj').value,false); }
-function adicionarDataEscala(){
-  const d=$('eData').value; if(!d) return;
-  if(!escalaDatas.includes(d)) escalaDatas.push(d);
-  escalaDatas.sort(); $('eData').value=''; renderChipsEscala();
+function onEscfProj(){ $('escfSetor').innerHTML='<option value="">Todos os setores</option>'+optsSetor($('escfProj').value,false); renderEscala(); }
+function escLimpar(){ $('escfProj').value=''; $('escfSetor').innerHTML='<option value="">Todos os setores</option>'; $('escfMed').value=''; renderEscala(); }
+function escSetView(v){ escView=v;
+  $('emSem').classList.toggle('on',v==='sem'); $('emMes').classList.toggle('on',v==='mes'); $('emCal').classList.toggle('on',v==='cal');
+  recarregarEscala(); }
+function escNav(delta){ if(escView==='sem') escAnchor.setDate(escAnchor.getDate()+delta*7); else escAnchor.setMonth(escAnchor.getMonth()+delta); escAnchor=new Date(escAnchor); recarregarEscala(); }
+function escHoje(){ escAnchor=new Date(); recarregarEscala(); }
+
+async function recarregarEscala(){
+  const [ini,fim]=escRangeDatas();
+  let qi=ini, qf=fim;
+  if(escView!=='sem'){ qi=escWeekStart(ini); qf=new Date(fim); qf.setDate(fim.getDate()+(6-((fim.getDay()+6)%7))); }
+  const {data,error}=await sb.from('escalas')
+    .select('id,data,observacao,medico_id,projeto_id,setor_id,medicos:medico_id(nome),setores:setor_id(nome)')
+    .gte('data',isoLocal(qi)).lte('data',isoLocal(qf)).order('data');
+  escalasAdm = error?[]:(data||[]);
+  renderEscala();
 }
-function removerDataEscala(d){ escalaDatas=escalaDatas.filter(x=>x!==d); renderChipsEscala(); }
-function renderChipsEscala(){
-  $('eChips').innerHTML = escalaDatas.length
-    ? escalaDatas.map(d=>`<span style="background:var(--brand-l);border:1px solid #cfe3c5;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:600;color:var(--brand-d)">${d.split('-').reverse().join('/')} <a onclick="removerDataEscala('${d}')" style="cursor:pointer;color:#c0392b;margin-left:4px">✕</a></span>`).join('')
-    : '<span class="sub" style="margin:0">Nenhum dia adicionado ainda.</span>';
+function rotuloMes(d){ return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}); }
+function rotuloInterv(a,b){ return a.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+' — '+b.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}); }
+function renderEscala(){
+  const [ini,fim]=escRangeDatas();
+  if(escView==='sem'){ $('escRange').textContent=rotuloInterv(ini,fim); renderEscSemana(ini); }
+  else if(escView==='mes'){ $('escRange').textContent=rotuloMes(escAnchor); renderEscMensal(); }
+  else { $('escRange').textContent=rotuloMes(escAnchor); renderEscCalendario(); }
 }
-async function salvarEscala(){
-  $('eErro').classList.add('hidden');
-  const med=$('eMed').value;
-  if(!med) return escErro('Selecione o médico.');
-  if($('eData').value && !escalaDatas.includes($('eData').value)) escalaDatas.push($('eData').value);
-  if(!escalaDatas.length) return escErro('Adicione pelo menos um dia.');
-  const setor=$('eSetor').value||null, hi=$('eHi').value||null, hf=$('eHf').value||null, obs=$('eObs').value.trim()||null;
-  const rows=escalaDatas.map(d=>({medico_id:med, setor_id:setor, data:d, hora_inicio:hi, hora_fim:hf, observacao:obs}));
-  const {error}=await sb.from('escalas').insert(rows);
-  if(error) return escErro('Erro: '+error.message);
-  escalaDatas=[]; renderChipsEscala();
-  $('eHi').value=''; $('eHf').value=''; $('eObs').value=''; $('eData').value='';
-  carregarEscalas();
-}
-function escErro(m){ $('eErro').textContent=m; $('eErro').classList.remove('hidden'); }
-async function carregarEscalas(){
-  const mes=$('efMes').value; const body=$('escBody');
-  if(!mes){ body.innerHTML='<tr><td colspan="6" class="empty">Selecione o mês.</td></tr>'; return; }
-  const [y,m]=mes.split('-').map(Number);
-  const ini=`${mes}-01`; const fimD=new Date(y,m,0).getDate(); const fim=`${mes}-${String(fimD).padStart(2,'0')}`;
-  let q=sb.from('escalas').select('id,data,hora_inicio,hora_fim,observacao,medico_id,setor_id,medicos:medico_id(nome),setores:setor_id(nome,projeto_id)')
-    .gte('data',ini).lte('data',fim).order('data');
-  if($('efMed').value) q=q.eq('medico_id',$('efMed').value);
-  const {data,error}=await q;
-  if(error){ body.innerHTML='<tr><td colspan="6" class="empty">Erro ao carregar.</td></tr>'; return; }
-  let arr=data||[];
-  const fp=$('efProj').value; if(fp) arr=arr.filter(e=>e.setores&&e.setores.projeto_id===fp);
-  if(!arr.length){ body.innerHTML='<tr><td colspan="6" class="empty">Nenhuma escala no mês.</td></tr>'; return; }
-  body.innerHTML=arr.map(e=>{
-    const hor=(e.hora_inicio||e.hora_fim)?`${e.hora_inicio||''}${e.hora_fim?'–'+e.hora_fim:''}`:'—';
-    return `<tr>
-      <td>${e.data.split('-').reverse().join('/')}</td>
-      <td>${e.medicos?.nome||'—'}</td>
-      <td>${e.setor_id?nomeSetor(e.setor_id):'—'}</td>
-      <td>${hor}</td><td>${e.observacao||'—'}</td>
-      <td><button class="sbtn warn" onclick="excluirEscala('${e.id}')">Excluir</button></td></tr>`;
+function escChip(e){ return `<div class="esc-chip"><span>${e.medicos?.nome||'—'}${e.setores?.nome?(' · '+e.setores.nome):''}</span><a onclick="excluirEscala('${e.id}')" title="Remover">✕</a></div>`; }
+
+function renderEscSemana(ini){
+  const dias=[]; for(let i=0;i<7;i++){ const d=new Date(ini); d.setDate(ini.getDate()+i); dias.push(d); }
+  const hoje=isoLocal(new Date()); const projs=escProjetosVis();
+  if(!projs.length){ $('escCorpo').innerHTML='<div class="empty">Nenhum projeto ativo. Cadastre na aba Projetos.</div>'; return; }
+  $('escCorpo').innerHTML=projs.map(p=>{
+    const cols=dias.map((d,i)=>{ const ds=isoLocal(d); const its=escDe(p.id,ds);
+      return `<div class="esc-dcol"><div class="esc-dh">${ESCDOW[i]}<small>${d.getDate()}</small></div>
+        <div class="esc-cell${ds===hoje?' hoje':''}">${its.map(escChip).join('')}
+          <button class="esc-add" title="Escalar" onclick="abrirEscAdd('${p.id}','${ds}')">+</button></div></div>`; }).join('');
+    return `<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div><div class="esc-grid">${cols}</div></div>`;
   }).join('');
 }
+function escVerSo(pid){ $('escfProj').value=pid; onEscfProj(); }
+function escMonthWeeks(y,m){ const start=escWeekStart(new Date(y,m,1)); const weeks=[]; let cur=new Date(start);
+  for(let w=0;w<6;w++){ const row=[]; for(let i=0;i<7;i++){ row.push(new Date(cur)); cur.setDate(cur.getDate()+1);} weeks.push(row);} return weeks; }
+function escHeadDow(){ return '<div class="esc-mgrid">'+ESCDOW.map(d=>`<div class="esc-dh" style="border-radius:8px">${d}</div>`).join('')+'</div>'; }
+function escMiniChip(e){ return `<div class="esc-chip" style="margin-top:3px"><span>${e.medicos?.nome||'—'}</span><a onclick="excluirEscala('${e.id}')">✕</a></div>`; }
+function renderEscMensal(){
+  const y=escAnchor.getFullYear(), m=escAnchor.getMonth(), hoje=isoLocal(new Date());
+  const projs=escProjetosVis();
+  if(!projs.length){ $('escCorpo').innerHTML='<div class="empty">Nenhum projeto ativo.</div>'; return; }
+  const weeks=escMonthWeeks(y,m);
+  $('escCorpo').innerHTML=projs.map(p=>{
+    const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m, its=escDe(p.id,ds);
+      return `<div class="esc-mcell${out?' out':''}${ds===hoje?' hoje':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="dn">${d.getDate()}</span>${out?'':`<button class="esc-add" style="margin:0;width:22px;height:22px;padding:0" onclick="abrirEscAdd('${p.id}','${ds}')">+</button>`}</div>
+        ${its.map(escMiniChip).join('')}</div>`; }).join('')).join('');
+    return `<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div>${escHeadDow()}<div class="esc-mgrid" style="margin-top:5px">${grid}</div></div>`;
+  }).join('');
+}
+function renderEscCalendario(){
+  const y=escAnchor.getFullYear(), m=escAnchor.getMonth(), hoje=isoLocal(new Date());
+  const projs=escProjetosVis(); const weeks=escMonthWeeks(y,m);
+  const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m;
+    let its=[]; projs.forEach(p=> its=its.concat(escDe(p.id,ds)));
+    return `<div class="esc-mcell${out?' out':''}${ds===hoje?' hoje':''}" style="min-height:86px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="dn">${d.getDate()}</span>${out?'':`<button class="esc-add" style="margin:0;width:22px;height:22px;padding:0" onclick="abrirEscAddCal('${ds}')">+</button>`}</div>
+      ${its.map(escMiniChip).join('')}</div>`; }).join('')).join('');
+  $('escCorpo').innerHTML=escHeadDow()+`<div class="esc-mgrid" style="margin-top:5px">${grid}</div>`;
+}
+
+function escOptMed(){ return '<option value="">Selecione…</option>'+medicos.filter(m=>m.papel==='medico').map(m=>`<option value="${m.id}">${m.nome}</option>`).join(''); }
+function abrirEscAdd(projId, ds){
+  escAddProj=projId; escAddData=ds; const p=projetos.find(x=>x.id===projId);
+  $('escAddSub').textContent=(p?p.nome+' · ':'')+ds.split('-').reverse().join('/');
+  $('eaProjWrap').style.display='none';
+  $('eaMed').innerHTML=escOptMed(); $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(projId,false);
+  $('eaObs').value=''; $('eaErro').classList.add('hidden'); $('escAddM').classList.remove('hidden');
+}
+function abrirEscAddCal(ds){
+  escAddData=ds; escAddProj=$('escfProj').value||null;
+  $('escAddSub').textContent=ds.split('-').reverse().join('/');
+  if(escAddProj){ $('eaProjWrap').style.display='none'; $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(escAddProj,false); }
+  else { $('eaProjWrap').style.display=''; $('eaProj').innerHTML='<option value="">Selecione o projeto…</option>'+projetos.filter(p=>p.ativo).map(p=>`<option value="${p.id}">${p.nome}</option>`).join(''); $('eaSetor').innerHTML='<option value="">—</option>'; }
+  $('eaMed').innerHTML=escOptMed(); $('eaObs').value=''; $('eaErro').classList.add('hidden'); $('escAddM').classList.remove('hidden');
+}
+function onEaProj(){ escAddProj=$('eaProj').value; $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(escAddProj,false); }
+async function salvarEscAdd(){
+  $('eaErro').classList.add('hidden');
+  const proj = escAddProj || ($('eaProj')?$('eaProj').value:''); const med=$('eaMed').value;
+  if(!proj){ $('eaErro').textContent='Selecione o projeto.'; $('eaErro').classList.remove('hidden'); return; }
+  if(!med){ $('eaErro').textContent='Selecione o médico.'; $('eaErro').classList.remove('hidden'); return; }
+  const row={medico_id:med, projeto_id:proj, setor_id:$('eaSetor').value||null, data:escAddData, observacao:$('eaObs').value.trim()||null};
+  const {error}=await sb.from('escalas').insert(row);
+  if(error){ $('eaErro').textContent='Erro: '+error.message; $('eaErro').classList.remove('hidden'); return; }
+  $('escAddM').classList.add('hidden'); recarregarEscala();
+}
 async function excluirEscala(id){
-  if(!confirm('Excluir esta escala?')) return;
+  if(!confirm('Remover esta escala?')) return;
   const {error}=await sb.from('escalas').delete().eq('id',id);
   if(error) return alert('Erro: '+error.message);
-  carregarEscalas();
+  recarregarEscala();
 }
 
 /* ---------- pendentes ---------- */
