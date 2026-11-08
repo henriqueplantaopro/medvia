@@ -114,6 +114,10 @@
   .papel.on{background:var(--brand);color:#fff;border-color:var(--brand)}
   .proc-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--brand-l);border:1px solid #cfe3c5;border-radius:10px;padding:9px 12px;margin-bottom:7px;font-weight:600;color:var(--ink)}
   .proc-chip a{cursor:pointer;color:#c0392b;font-weight:800;flex:none}
+  .fotos-lista{display:flex;flex-wrap:wrap;gap:10px}
+  .foto-item{position:relative}
+  .foto-item img{width:74px;height:74px;object-fit:cover;border-radius:9px;border:1px solid var(--line)}
+  .foto-item a{position:absolute;top:-7px;right:-7px;background:#c0392b;color:#fff;border-radius:50%;width:21px;height:21px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;cursor:pointer}
 </style>
 </head>
 <body>
@@ -216,7 +220,7 @@
             <select id="selProc" style="flex:1"><option value="">Selecione o procedimento…</option></select>
             <button type="button" class="btn-foto" style="white-space:nowrap;flex:none" onclick="addProc()">+ Adicionar</button>
           </div>
-          <p class="muted-note" style="margin:6px 0 0">Pode adicionar vários — e repetir o mesmo procedimento, se foi feito mais de uma vez.</p>
+          <p class="muted-note" style="margin:6px 0 0">Pode selecionar mais de 1 procedimento — e repetir o mesmo procedimento, se foi feito mais de uma vez.</p>
           <div id="procLista" style="margin-top:10px"></div>
         </div>
         <div class="field hidden" id="auxWrap">
@@ -228,19 +232,15 @@
           <select id="selAux"><option value="">— sem auxiliar —</option></select>
         </div>
         <div class="field" id="fotoWrap">
-          <label>Foto da ficha (obrigatória)</label>
+          <label>Fotos da ficha (pelo menos 1)</label>
           <div class="foto-botoes">
             <button type="button" class="btn-foto" onclick="$('fotoCam').click()">Tirar foto</button>
             <button type="button" class="btn-foto" onclick="$('fotoGal').click()">Da galeria</button>
           </div>
           <input id="fotoCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="onFoto(event)">
-          <input id="fotoGal" type="file" accept="image/*" class="hidden" onchange="onFoto(event)">
-          <div class="photo-row" style="margin-top:10px">
-            <img id="fotoThumb" class="thumb hidden" alt="">
-            <span id="fotoNomeArq" class="muted-note"></span>
-          </div>
-          <p id="fotoReq" class="muted-note" style="color:#c0392b;font-weight:600">Anexe a foto da ficha para concluir o lançamento.</p>
-          <p id="fotoNota" class="muted-note hidden">A foto atual é mantida; só escolha uma nova se quiser trocá-la.</p>
+          <input id="fotoGal" type="file" accept="image/*" multiple class="hidden" onchange="onFoto(event)">
+          <div id="fotosLista" class="fotos-lista" style="margin-top:10px"></div>
+          <p id="fotoReq" class="muted-note" style="color:#c0392b;font-weight:600">Anexe pelo menos uma foto da ficha para concluir o lançamento.</p>
         </div>
         <div class="field" id="obsWrap">
           <label>Observação (opcional)</label>
@@ -318,14 +318,16 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.08 · medvia-11';
+const APP_VERSION = '2026.11.08 · medvia-12';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
 let procs = [];            // catálogo acessível (id, nome, repasse, setor_id, aux_regra, aux_repasse…)
 let setoresMed = [];       // setores em que o médico pode lançar
 let auxDocs = [];          // médicos que podem ser escolhidos como auxiliar
-let fotoFile = null, fotoExistente = false;
+let fotosNovas = [];      // novas fotos a enviar: [{file,url}]
+let fotosExistentes = []; // fotos já salvas (edição): [{id,path,url}]
+let fotosRemover = [];    // fotos existentes removidas na edição: [{id,path}]
 let editId = null;
 let souAuxiliar = false;      // no lançamento, marquei que EU fui o auxiliar
 let procsSelec = [];          // procedimentos da cirurgia (permite repetir)
@@ -636,6 +638,7 @@ function mudarPagina(d){ listPagina=Math.max(0,listPagina+d); carregarLista(); w
 /* ---------- novo / editar ---------- */
 function restaurarFormulario(){
   souAuxiliar=false; procsSelec=[];
+  fotosNovas=[]; fotosExistentes=[]; fotosRemover=[]; renderFotos();
   $('papelPrinc').classList.add('on'); $('papelAux').classList.remove('on');
   $('paciente').disabled=false; $('selSetor').disabled=false;
   $('fotoWrap').classList.remove('hidden'); $('obsWrap').classList.remove('hidden');
@@ -644,55 +647,69 @@ function novoLancamento(){
   if(perfil && perfil.ativo===false){ toast('Seu acesso não permite lançar. Solicite liberação do gestor.'); return; }
   if(!setoresMed.length){ toast('Nenhum setor habilitado para você. Solicite ao gestor.'); return; }
   restaurarFormulario();
-  editId=null; fotoFile=null; fotoExistente=false;
+  editId=null;
   $('paciente').value=''; $('obs').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
   $('selSetor').disabled = (setoresMed.length===1);
   onSetorChange();
-  $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
+  $('fotoCam').value=''; $('fotoGal').value='';
   $('novoTitulo').textContent='Novo lançamento'; $('novoSub').textContent='Preencha após o procedimento.';
-  $('btnSalvar').textContent='Concluir lançamento'; $('fotoNota').classList.add('hidden');
+  $('btnSalvar').textContent='Concluir lançamento';
   atualizarBotaoSalvar();
   $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
   $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
 }
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome)')
+    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 1 hora encerrado. Solicite ao gestor.'); carregarLista(); return; }
   restaurarFormulario();
-  editId=id; fotoFile=null; fotoExistente=!!data.foto_path;
+  editId=id;
   $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
   if($('selSetor')){ $('selSetor').value=data.setor_id||''; $('selSetor').disabled=true; }
   await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
   procsSelec=(data.lancamento_itens||[]).map(it=>({id:it.procedimento_id, nome:it.nome||(procs.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
   renderProcLista();
   if($('selAux')) $('selAux').value=data.medico_auxiliar_id||'';
-  $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
+  // carrega as fotos já salvas (foto_path legada + tabela de fotos)
+  const fpaths=[]; if(data.foto_path) fpaths.push({id:null,path:data.foto_path});
+  (data.lancamento_fotos||[]).forEach(f=>{ if(f.path && !fpaths.some(x=>x.path===f.path)) fpaths.push({id:f.id,path:f.path}); });
+  for(const f of fpaths){ const {data:su}=await sb.storage.from('fotos').createSignedUrl(f.path,3600); fotosExistentes.push({id:f.id,path:f.path,url:su?.signedUrl||''}); }
+  renderFotos();
+  $('fotoCam').value=''; $('fotoGal').value='';
   $('novoTitulo').textContent='Editar lançamento'; $('novoSub').textContent='Ajuste o que precisar e salve.';
-  $('btnSalvar').textContent='Salvar alterações'; $('fotoNota').classList.remove('hidden');
+  $('btnSalvar').textContent='Salvar alterações';
   atualizarBotaoSalvar();
   $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
   $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
 }
 function atualizarBotaoSalvar(){
-  const temFoto = !!fotoFile || fotoExistente;
+  const temFoto = (fotosNovas.length + fotosExistentes.length) > 0;
   $('btnSalvar').disabled = !temFoto;
   $('fotoReq').classList.toggle('hidden', temFoto);
 }
+function renderFotos(){
+  const box=$('fotosLista'); if(!box) return;
+  const ex=fotosExistentes.map((f,i)=>`<div class="foto-item"><img src="${f.url||''}" alt=""><a onclick="removerFotoExistente(${i})" title="Remover">✕</a></div>`).join('');
+  const nv=fotosNovas.map((f,i)=>`<div class="foto-item"><img src="${f.url}" alt=""><a onclick="removerFotoNova(${i})" title="Remover">✕</a></div>`).join('');
+  box.innerHTML = (ex+nv) || '<span class="muted-note">Nenhuma foto anexada ainda.</span>';
+}
+function removerFotoNova(i){ fotosNovas.splice(i,1); renderFotos(); atualizarBotaoSalvar(); }
+function removerFotoExistente(i){ const f=fotosExistentes.splice(i,1)[0]; if(f) fotosRemover.push(f); renderFotos(); atualizarBotaoSalvar(); }
+function lerDataUrl(file){ return new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(file); }); }
 
 /* ---------- foto (comprime no aparelho) ---------- */
 async function onFoto(e){
-  const f=e.target.files[0]; if(!f) return;
-  $('fotoNomeArq').textContent='Processando foto…';
-  try{ fotoFile = await comprimirImagem(f); }catch(err){ fotoFile = f; }
-  const kb=Math.max(1,Math.round(fotoFile.size/1024));
-  $('fotoNomeArq').textContent=(fotoFile.name||'foto')+' · '+(kb>=1024?(kb/1024).toFixed(1)+' MB':kb+' KB');
-  const r=new FileReader(); r.onload=()=>{ $('fotoThumb').src=r.result; $('fotoThumb').classList.remove('hidden'); };
-  r.readAsDataURL(fotoFile);
-  atualizarBotaoSalvar();
+  const files=[...(e.target.files||[])]; if(!files.length) return;
+  for(const f of files){
+    let comp; try{ comp=await comprimirImagem(f); }catch(err){ comp=f; }
+    let url; try{ url=await lerDataUrl(comp); }catch(_){ url=''; }
+    fotosNovas.push({file:comp, url});
+  }
+  e.target.value='';
+  renderFotos(); atualizarBotaoSalvar();
 }
 function comprimirImagem(file, maxLado=1600, qualidade=0.72){
   return new Promise((resolve,reject)=>{
@@ -737,7 +754,7 @@ async function salvar(){
     if(regra==='obrigatorio' && !outro) return showErr('novoErr','Selecione o médico auxiliar (obrigatório neste lançamento).');
     auxId=outro||null; auxNome=outro?(auxDocs.find(a=>a.id===outro)?.nome||null):null;
   }
-  if(!editId && !fotoFile && !fotoExistente) return showErr('novoErr','Anexe a foto da ficha.');
+  if((fotosNovas.length + fotosExistentes.length)===0) return showErr('novoErr','Anexe pelo menos uma foto da ficha.');
   $('btnSalvar').disabled=true; $('btnSalvar').textContent='Salvando…';
   try{
     let lancId=editId;
@@ -754,11 +771,23 @@ async function salvar(){
     }
     const {error:e3}=await sb.from('lancamento_itens').insert(procsSelec.map(p=>({lancamento_id:lancId, procedimento_id:p.id})));
     if(e3) throw e3;
-    if(fotoFile){
-      const path=`${perfil.id}/${lancId}.jpg`;
-      const {error:eUp}=await sb.storage.from('fotos').upload(path,fotoFile,{upsert:true});
-      if(!eUp) await sb.from('lancamentos').update({foto_path:path}).eq('id',lancId);
+    // ---- fotos (várias) ----
+    let novasPaths=[];
+    for(let i=0;i<fotosNovas.length;i++){
+      const path=`${perfil.id}/${lancId}/${Date.now()}-${i}.jpg`;
+      const {error:eUp}=await sb.storage.from('fotos').upload(path,fotosNovas[i].file,{upsert:true});
+      if(eUp) throw eUp;
+      const {error:eF}=await sb.from('lancamento_fotos').insert({lancamento_id:lancId, path});
+      if(eF) throw eF;
+      novasPaths.push(path);
     }
+    if(editId && fotosRemover.length){
+      await sb.storage.from('fotos').remove(fotosRemover.map(f=>f.path));
+      const ids=fotosRemover.filter(f=>f.id).map(f=>f.id);
+      if(ids.length) await sb.from('lancamento_fotos').delete().in('id',ids);
+    }
+    const restantes=[...fotosExistentes.map(f=>f.path), ...novasPaths];
+    await sb.from('lancamentos').update({foto_path: restantes[0]||null}).eq('id',lancId);
     if(editId){ toast('Lançamento atualizado.'); goHome(); }
     else { $('okMsg').textContent='Lançamento registrado';
       $('viewNovo').classList.add('hidden'); $('viewOk').classList.remove('hidden'); window.scrollTo(0,0); }
