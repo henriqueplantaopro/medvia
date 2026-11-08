@@ -437,11 +437,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="config.js"></script>
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.08 · medvia-12';
+const APP_VERSION='2026.11.08 · medvia-13';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -1024,14 +1025,41 @@ async function abrirFotos(id){
   $('modal').classList.remove('hidden');
   const urls=[];
   for(const p of paths){ const {data}=await sb.storage.from('fotos').createSignedUrl(p,3600); if(data?.signedUrl) urls.push(data.signedUrl); }
-  $('modalFotos').innerHTML = `<div style="text-align:right"><button class="btn btn-ghost" onclick="fecharFoto()">Fechar ✕</button></div>`+
-  urls.map((u,i)=>`<div style="background:#000;border-radius:10px;padding:8px;text-align:center">
-    <img src="${u}" style="max-width:100%;max-height:72vh;border-radius:6px" alt="">
-    <div style="margin-top:8px"><button class="btn btn-ghost" onclick="event.stopPropagation();baixarFotoUrl('${u}','${cod}${urls.length>1?'_'+(i+1):''}')">Baixar${urls.length>1?' '+(i+1):''}</button></div>
-  </div>`).join('') || '<div style="color:#fff">Não foi possível carregar as fotos.</div>';
+  const topo=`<div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+    <button class="btn btn-green" onclick="event.stopPropagation();baixarFotosPdf('${id}',this)">Baixar PDF${urls.length>1?' ('+urls.length+' págs)':''}</button>
+    <button class="btn btn-ghost" onclick="fecharFoto()">Fechar ✕</button></div>`;
+  $('modalFotos').innerHTML = topo + (urls.map(u=>`<div style="background:#000;border-radius:10px;padding:8px;text-align:center">
+    <img src="${u}" style="max-width:100%;max-height:72vh;border-radius:6px" alt=""></div>`).join('') || '<div style="color:#fff">Não foi possível carregar as fotos.</div>');
 }
 function fecharFoto(){ $('modal').classList.add('hidden'); $('modalFotos').innerHTML=''; }
-function baixarFotoUrl(url,nome){ const a=document.createElement('a'); a.href=url; a.download=(nome||'foto')+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
+function _blobDataUrl(blob){ return new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(blob); }); }
+function _imgDim(src){ return new Promise(res=>{ const im=new Image(); im.onload=()=>res({w:im.naturalWidth||1000,h:im.naturalHeight||1400}); im.onerror=()=>res({w:1000,h:1400}); im.src=src; }); }
+async function baixarFotosPdf(id, btn){
+  const l=todos.find(x=>x.id===id); if(!l) return;
+  const paths=fotosDoLanc(l); if(!paths.length) return;
+  const cod=l.codigo_interno||'lancamento';
+  const prev=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Gerando PDF…'; }
+  try{
+    const imgs=[];
+    for(const p of paths){
+      const {data}=await sb.storage.from('fotos').createSignedUrl(p,3600); if(!data?.signedUrl) continue;
+      const blob=await (await fetch(data.signedUrl)).blob();
+      const dataUrl=await _blobDataUrl(blob);
+      const dim=await _imgDim(dataUrl);
+      imgs.push({dataUrl, w:dim.w, h:dim.h});
+    }
+    if(!imgs.length){ alert('Não foi possível carregar as fotos.'); return; }
+    const { jsPDF }=window.jspdf;
+    const pdf=new jsPDF({unit:'pt',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight(), m=24;
+    imgs.forEach((im,i)=>{ if(i>0) pdf.addPage();
+      const sc=Math.min((pw-2*m)/im.w,(ph-2*m)/im.h); const w=im.w*sc, h=im.h*sc;
+      try{ pdf.addImage(im.dataUrl,'JPEG',(pw-w)/2,(ph-h)/2,w,h); }catch(_){ pdf.addImage(im.dataUrl,(pw-w)/2,(ph-h)/2,w,h); }
+    });
+    pdf.save(`MedVia_${cod}.pdf`);
+  }catch(err){ alert('Erro ao gerar PDF: '+(err.message||err)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=prev; } }
+}
 
 /* editar lançamento (gestor/operador) */
 let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
