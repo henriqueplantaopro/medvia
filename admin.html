@@ -433,7 +433,7 @@
 </div>
 
 <!-- MODAL FOTO -->
-<div id="modal" class="modal hidden" onclick="fecharFoto()"><img id="modalImg" style="max-width:92%;max-height:88%;border-radius:10px" alt=""></div>
+<div id="modal" class="modal hidden" onclick="if(event.target===this)fecharFoto()"><div id="modalFotos" style="max-width:94%;max-height:90%;overflow:auto;display:flex;flex-direction:column;gap:12px"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -441,7 +441,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.08 · medvia-10';
+const APP_VERSION='2026.11.08 · medvia-12';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -978,7 +978,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -1004,7 +1004,8 @@ function renderLanc(){
     const nomes=its.map(i=>i.nome).filter(Boolean).join(' + ')||'—';
     const fatT=sum(its,'valor_faturamento'), repT=sum(its,'repasse');
     const auxFatT=sum(its,'aux_faturamento'), auxRepT=sum(its,'aux_repasse');
-    const foto = l.foto_path ? `<span class="foto" onclick="verFoto('${l.foto_path}')">Ver</span> · <span class="foto" onclick="baixarFoto('${l.foto_path}','${l.codigo_interno||'foto'}')">Baixar</span>` : '—';
+    const nFotos=fotosDoLanc(l).length;
+    const foto = nFotos ? `<span class="foto" onclick="abrirFotos('${l.id}')">Ver${nFotos>1?' ('+nFotos+')':''}</span>` : '—';
     const aux = l.medico_auxiliar_nome ? `${l.medico_auxiliar_nome}<div class="fat-only num" style="font-size:11px;color:var(--muted)">${brl(auxFatT)}</div><div class="num" style="font-size:11px;color:var(--muted)">${brl(auxRepT)}</div>` : '—';
     return `<tr>
       <td class="codigo">${l.codigo_interno||'—'}<div style="margin-top:6px"><span class="foto" onclick="abrirEditarLanc('${l.id}')">Editar</span></div></td>
@@ -1013,10 +1014,24 @@ function renderLanc(){
       <td>${fmtData(l.criado_em)}</td><td>${foto}</td></tr>`;
   }).join('');
 }
-async function verFoto(path){ const {data}=await sb.storage.from('fotos').createSignedUrl(path,3600); if(data?.signedUrl){ $('modalImg').src=data.signedUrl; $('modal').classList.remove('hidden'); } }
-function fecharFoto(){ $('modal').classList.add('hidden'); $('modalImg').src=''; }
-async function baixarFoto(path,nome){ const {data}=await sb.storage.from('fotos').createSignedUrl(path,3600); if(!data?.signedUrl) return;
-  const a=document.createElement('a'); a.href=data.signedUrl; a.download=(nome||'foto')+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
+function fotosDoLanc(l){ const paths=[]; if(l.foto_path) paths.push(l.foto_path);
+  (l.lancamento_fotos||[]).forEach(f=>{ if(f.path && !paths.includes(f.path)) paths.push(f.path); }); return paths; }
+async function abrirFotos(id){
+  const l=todos.find(x=>x.id===id); if(!l) return;
+  const paths=fotosDoLanc(l); if(!paths.length) return;
+  const cod=l.codigo_interno||'foto';
+  $('modalFotos').innerHTML='<div style="color:#fff;text-align:center">Carregando…</div>';
+  $('modal').classList.remove('hidden');
+  const urls=[];
+  for(const p of paths){ const {data}=await sb.storage.from('fotos').createSignedUrl(p,3600); if(data?.signedUrl) urls.push(data.signedUrl); }
+  $('modalFotos').innerHTML = `<div style="text-align:right"><button class="btn btn-ghost" onclick="fecharFoto()">Fechar ✕</button></div>`+
+  urls.map((u,i)=>`<div style="background:#000;border-radius:10px;padding:8px;text-align:center">
+    <img src="${u}" style="max-width:100%;max-height:72vh;border-radius:6px" alt="">
+    <div style="margin-top:8px"><button class="btn btn-ghost" onclick="event.stopPropagation();baixarFotoUrl('${u}','${cod}${urls.length>1?'_'+(i+1):''}')">Baixar${urls.length>1?' '+(i+1):''}</button></div>
+  </div>`).join('') || '<div style="color:#fff">Não foi possível carregar as fotos.</div>';
+}
+function fecharFoto(){ $('modal').classList.add('hidden'); $('modalFotos').innerHTML=''; }
+function baixarFotoUrl(url,nome){ const a=document.createElement('a'); a.href=url; a.download=(nome||'foto')+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
 
 /* editar lançamento (gestor/operador) */
 let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
