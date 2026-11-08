@@ -112,6 +112,8 @@
   .papel-toggle{display:flex;gap:6px;margin:0 0 8px}
   .papel{flex:1;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
   .papel.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .proc-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--brand-l);border:1px solid #cfe3c5;border-radius:10px;padding:9px 12px;margin-bottom:7px;font-weight:600;color:var(--ink)}
+  .proc-chip a{cursor:pointer;color:#c0392b;font-weight:800;flex:none}
 </style>
 </head>
 <body>
@@ -209,8 +211,13 @@
           <select id="selSetor" onchange="onSetorChange()"><option value="">Selecione o setor…</option></select>
         </div>
         <div class="field">
-          <label>Procedimento realizado</label>
-          <select id="selProc" onchange="onProcChange()"><option value="">Selecione o procedimento…</option></select>
+          <label>Procedimentos realizados</label>
+          <div style="display:flex;gap:8px">
+            <select id="selProc" style="flex:1"><option value="">Selecione o procedimento…</option></select>
+            <button type="button" class="btn-foto" style="white-space:nowrap;flex:none" onclick="addProc()">+ Adicionar</button>
+          </div>
+          <p class="muted-note" style="margin:6px 0 0">Pode adicionar vários — e repetir o mesmo procedimento, se foi feito mais de uma vez.</p>
+          <div id="procLista" style="margin-top:10px"></div>
         </div>
         <div class="field hidden" id="auxWrap">
           <label id="auxLabel">Médico auxiliar</label>
@@ -252,8 +259,7 @@
           <p style="margin:0 0 6px;color:var(--muted)" id="okMsg">Lançamento registrado</p>
           <div class="big" id="okCodigo">—</div>
         </div>
-        <button class="btn btn-go" style="margin-top:16px" onclick="adicionarProcedimento()">+ Outro procedimento nesta cirurgia</button>
-        <button class="btn btn-primary" style="margin-top:10px" onclick="novoLancamento()">Novo lançamento (outra cirurgia)</button>
+        <button class="btn btn-go" style="margin-top:16px" onclick="novoLancamento()">Novo lançamento</button>
         <button class="btn btn-ghost" style="margin-top:10px" onclick="goHome()">Ver meus lançamentos</button>
       </div>
     </div>
@@ -312,7 +318,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.08 · medvia-10';
+const APP_VERSION = '2026.11.08 · medvia-11';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 let perfil = null;
@@ -322,7 +328,7 @@ let auxDocs = [];          // médicos que podem ser escolhidos como auxiliar
 let fotoFile = null, fotoExistente = false;
 let editId = null;
 let souAuxiliar = false;      // no lançamento, marquei que EU fui o auxiliar
-let lancContinuaId = null;    // lançamento em aberto, para adicionar +1 procedimento
+let procsSelec = [];          // procedimentos da cirurgia (permite repetir)
 let listPagina = 0;
 const PAG = 20;
 
@@ -356,7 +362,7 @@ $('suNome')?.addEventListener('input', e=>{ $('suIni').value = iniciaisDe(e.targ
 /* navegação */
 function showView(name){ ['Login','Signup'].forEach(v=>$('view'+v)?.classList.add('hidden')); $('view'+name)?.classList.remove('hidden'); }
 function goHome(){ ['viewNovo','viewOk','viewDados','viewEscala'].forEach(v=>$(v).classList.add('hidden'));
-  lancContinuaId=null; $('paciente').disabled=false;
+  $('paciente').disabled=false; $('selSetor').disabled=false;
   $('viewHome').classList.remove('hidden'); $('fab').classList.remove('hidden');
   listPagina=0; carregarLista(); carregarResumo(); }
 
@@ -485,6 +491,7 @@ async function carregarAuxiliares(setorId){
   auxDocs = error ? [] : (data||[]).filter(m=>m.id!==perfil.id);
 }
 async function onSetorChange(){
+  procsSelec=[];
   await carregarAuxiliares($('selSetor') ? $('selSetor').value : '');
   filtrarProcPorSetor();
 }
@@ -514,26 +521,43 @@ function filtrarProcPorSetor(){
   if(!sel) return;
   sel.innerHTML='<option value="">Selecione o procedimento…</option>'+
     lista.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-  onProcChange();
+  renderProcLista();
 }
-function onProcChange(){
-  const sel=$('selProc'); const p = sel ? procs.find(x=>x.id===sel.value) : null;
+function addProc(){
+  const sel=$('selProc'); const id=sel?sel.value:''; if(!id){ return; }
+  const p=procs.find(x=>x.id===id); if(!p) return;
+  procsSelec.push({id:p.id, nome:p.nome});
+  sel.value='';
+  renderProcLista();
+}
+function removeProc(i){ procsSelec.splice(i,1); renderProcLista(); }
+function renderProcLista(){
+  const box=$('procLista'); if(!box) return;
+  box.innerHTML = procsSelec.length
+    ? procsSelec.map((p,i)=>`<div class="proc-chip"><span>${i+1}. ${p.nome}</span><a onclick="removeProc(${i})" title="Remover">✕</a></div>`).join('')
+    : '<p class="muted-note" style="margin:0">Nenhum procedimento adicionado ainda.</p>';
+  onProcListaChange();
+}
+function regraDaLista(){
+  let r='bloqueado';
+  procsSelec.forEach(x=>{ const pr=procs.find(p=>p.id===x.id); const g=pr?(pr.aux_regra||'bloqueado'):'bloqueado';
+    if(g==='obrigatorio') r='obrigatorio'; else if(g==='opcional' && r!=='obrigatorio') r='opcional'; });
+  return r;
+}
+function onProcListaChange(){
   const wrap=$('auxWrap'); if(!wrap) return;
-  const regra = p ? (p.aux_regra||'bloqueado') : 'bloqueado';
-  // ao adicionar procedimento num lançamento já aberto, os papéis estão fixos
-  if(regra==='bloqueado' || lancContinuaId){ wrap.classList.add('hidden'); souAuxiliar=false; $('selAux').innerHTML='<option value=""></option>'; $('selAux').value=''; return; }
+  const regra=regraDaLista();
+  if(regra==='bloqueado'){ wrap.classList.add('hidden'); souAuxiliar=false; $('papelPrinc').classList.add('on'); $('papelAux').classList.remove('on'); $('selAux').innerHTML='<option value=""></option>'; $('selAux').value=''; return; }
   wrap.classList.remove('hidden');
-  aplicarPapelLabel();
+  aplicarPapelLabel(regra);
 }
 function setPapel(aux){
   souAuxiliar=aux;
   $('papelPrinc').classList.toggle('on',!aux);
   $('papelAux').classList.toggle('on',aux);
-  aplicarPapelLabel();
+  aplicarPapelLabel(regraDaLista());
 }
-function aplicarPapelLabel(){
-  const sel=$('selProc'); const p=sel?procs.find(x=>x.id===sel.value):null;
-  const regra=p?(p.aux_regra||'bloqueado'):'bloqueado';
+function aplicarPapelLabel(regra){
   const selA=$('selAux'); const prev=selA.value;
   if(souAuxiliar){
     $('auxLabel').textContent='Médico principal (você foi o auxiliar)';
@@ -611,9 +635,9 @@ function mudarPagina(d){ listPagina=Math.max(0,listPagina+d); carregarLista(); w
 
 /* ---------- novo / editar ---------- */
 function restaurarFormulario(){
-  lancContinuaId=null; souAuxiliar=false;
+  souAuxiliar=false; procsSelec=[];
   $('papelPrinc').classList.add('on'); $('papelAux').classList.remove('on');
-  $('paciente').disabled=false;
+  $('paciente').disabled=false; $('selSetor').disabled=false;
   $('fotoWrap').classList.remove('hidden'); $('obsWrap').classList.remove('hidden');
 }
 function novoLancamento(){
@@ -623,6 +647,7 @@ function novoLancamento(){
   editId=null; fotoFile=null; fotoExistente=false;
   $('paciente').value=''; $('obs').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
+  $('selSetor').disabled = (setoresMed.length===1);
   onSetorChange();
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
   $('novoTitulo').textContent='Novo lançamento'; $('novoSub').textContent='Preencha após o procedimento.';
@@ -631,22 +656,9 @@ function novoLancamento(){
   $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
   $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
 }
-function adicionarProcedimento(){
-  if(!lancContinuaId){ novoLancamento(); return; }
-  editId=null; souAuxiliar=false;
-  $('paciente').disabled=true; $('selSetor').disabled=true;
-  $('auxWrap').classList.add('hidden'); $('fotoWrap').classList.add('hidden'); $('obsWrap').classList.add('hidden');
-  $('fotoReq').classList.add('hidden');
-  $('selProc').value=''; onProcChange();
-  $('novoTitulo').textContent='Adicionar procedimento';
-  $('novoSub').textContent='Mesmo paciente e cirurgia — escolha mais um procedimento.';
-  $('btnSalvar').textContent='Adicionar procedimento'; $('btnSalvar').disabled=false;
-  $('viewHome').classList.add('hidden'); $('viewOk').classList.add('hidden');
-  $('viewNovo').classList.remove('hidden'); $('fab').classList.add('hidden'); window.scrollTo(0,0);
-}
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id)')
+    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 1 hora encerrado. Solicite ao gestor.'); carregarLista(); return; }
@@ -655,8 +667,9 @@ async function editarLancamento(id){
   $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
   if($('selSetor')){ $('selSetor').value=data.setor_id||''; $('selSetor').disabled=true; }
   await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
-  const it=(data.lancamento_itens||[])[0]||{}; $('selProc').value=it.procedimento_id||'';
-  onProcChange(); if($('selAux')) $('selAux').value=data.medico_auxiliar_id||'';
+  procsSelec=(data.lancamento_itens||[]).map(it=>({id:it.procedimento_id, nome:it.nome||(procs.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
+  renderProcLista();
+  if($('selAux')) $('selAux').value=data.medico_auxiliar_id||'';
   $('fotoCam').value=''; $('fotoGal').value=''; $('fotoNomeArq').textContent=''; $('fotoThumb').classList.add('hidden');
   $('novoTitulo').textContent='Editar lançamento'; $('novoSub').textContent='Ajuste o que precisar e salve.';
   $('btnSalvar').textContent='Salvar alterações'; $('fotoNota').classList.remove('hidden');
@@ -704,28 +717,16 @@ function comprimirImagem(file, maxLado=1600, qualidade=0.72){
 /* ---------- salvar ---------- */
 async function salvar(){
   hideErr('novoErr');
-  const proc=$('selProc').value;
-  if(!proc) return showErr('novoErr','Selecione o procedimento realizado.');
-
-  // ----- adicionar mais um procedimento ao mesmo lançamento -----
-  if(!editId && lancContinuaId){
-    $('btnSalvar').disabled=true; $('btnSalvar').textContent='Adicionando…';
-    try{
-      const {error}=await sb.from('lancamento_itens').insert({lancamento_id:lancContinuaId, procedimento_id:proc});
-      if(error) throw error;
-      $('okMsg').textContent='Procedimento adicionado à cirurgia';
-      $('viewNovo').classList.add('hidden'); $('viewOk').classList.remove('hidden'); window.scrollTo(0,0);
-    }catch(err){ showErr('novoErr','Erro ao salvar: '+(err.message||err)); }
-    finally{ $('btnSalvar').disabled=false; $('btnSalvar').textContent='Adicionar procedimento'; }
-    return;
-  }
+  // garante incluir o procedimento que está selecionado mas ainda não foi "Adicionado"
+  const selId=$('selProc').value;
+  if(selId && procs.find(x=>x.id===selId)){ procsSelec.push({id:selId, nome:procs.find(x=>x.id===selId).nome}); $('selProc').value=''; renderProcLista(); }
+  if(!procsSelec.length) return showErr('novoErr','Adicione pelo menos um procedimento.');
 
   const pac=$('paciente').value.trim(), obs=$('obs').value.trim();
   const setor=$('selSetor') ? $('selSetor').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
   if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
-  const pSel = procs.find(x=>x.id===proc);
-  const regra = pSel ? (pSel.aux_regra||'bloqueado') : 'bloqueado';
+  const regra = regraDaLista();
   const outro = (regra==='bloqueado') ? '' : ($('selAux') ? $('selAux').value : '');
   // papéis: por padrão EU sou o principal; se marquei "fui o auxiliar", inverte
   let principalId=perfil.id, auxId=null, auxNome=null;
@@ -733,7 +734,7 @@ async function salvar(){
     if(!outro) return showErr('novoErr','Selecione o médico principal.');
     principalId=outro; auxId=perfil.id; auxNome=perfil.nome;
   } else {
-    if(regra==='obrigatorio' && !outro) return showErr('novoErr','Selecione o médico auxiliar (obrigatório para este procedimento).');
+    if(regra==='obrigatorio' && !outro) return showErr('novoErr','Selecione o médico auxiliar (obrigatório neste lançamento).');
     auxId=outro||null; auxNome=outro?(auxDocs.find(a=>a.id===outro)?.nome||null):null;
   }
   if(!editId && !fotoFile && !fotoExistente) return showErr('novoErr','Anexe a foto da ficha.');
@@ -749,9 +750,9 @@ async function salvar(){
       const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
         .select('id,codigo_interno').single();
       if(e0) throw e0;
-      lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—'; lancContinuaId=data.id;
+      lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
     }
-    const {error:e3}=await sb.from('lancamento_itens').insert({lancamento_id:lancId, procedimento_id:proc});
+    const {error:e3}=await sb.from('lancamento_itens').insert(procsSelec.map(p=>({lancamento_id:lancId, procedimento_id:p.id})));
     if(e3) throw e3;
     if(fotoFile){
       const path=`${perfil.id}/${lancId}.jpg`;
