@@ -151,6 +151,11 @@
         <span style="font-weight:600;color:#9a6212" id="alertaPendTxt"></span>
         <span style="margin-left:auto;color:var(--brand-d);font-weight:700">Ver cadastros →</span>
       </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="filters" style="margin:0">
+          <div><label>Projeto</label><select id="homeProj" onchange="renderHome()"><option value="">Todos os projetos</option></select></div>
+        </div>
+      </div>
       <div class="kpis">
         <div class="kpi"><div class="n" id="kLanc">0</div><div class="l">Lançamentos (mês)</div></div>
         <div class="kpi"><div class="n" id="kProc">0</div><div class="l">Procedimentos (mês)</div></div>
@@ -436,7 +441,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.05 · medvia-8';
+const APP_VERSION='2026.11.08 · medvia-10';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -610,9 +615,22 @@ function escRangeDatas(){
   if(escView==='sem'){ const d=escWeekStart(escAnchor); const f=new Date(d); f.setDate(d.getDate()+6); return [d,f]; }
   const y=escAnchor.getFullYear(), m=escAnchor.getMonth(); return [new Date(y,m,1), new Date(y,m+1,0)];
 }
-function escProjetosVis(){ const f=$('escfProj').value; return projetos.filter(p=>p.ativo && (!f||p.id===f)); }
-function escDe(projId, ds){ const fs=$('escfSetor').value, fm=$('escfMed').value;
-  return escalasAdm.filter(e=> e.projeto_id===projId && e.data===ds && (!fs||e.setor_id===fs) && (!fm||e.medico_id===fm)); }
+function escProjetosVis(){ const fp=$('escfProj').value, fs=$('escfSetor').value;
+  let projId=fp; if(fs){ const s=setores.find(x=>x.id===fs); if(s) projId=s.projeto_id; }
+  return projetos.filter(p=>p.ativo && (!projId||p.id===projId)); }
+function escBlocosDoProjeto(p){
+  const fs=$('escfSetor').value;
+  if(fs){ const s=setores.find(x=>x.id===fs); return (s&&s.projeto_id===p.id)?[{id:s.id,nome:s.nome}]:[]; }
+  let lista=setores.filter(s=>s.projeto_id===p.id && s.ativo).map(s=>({id:s.id,nome:s.nome}));
+  const temSem=escalasAdm.some(e=>e.projeto_id===p.id && !e.setor_id);
+  if(!lista.length) lista=[{id:null,nome:'Geral'}]; else if(temSem) lista.push({id:null,nome:'Sem setor'});
+  return lista;
+}
+function escDeSetor(projId, setorId, ds){ const fm=$('escfMed').value;
+  return escalasAdm.filter(e=> e.projeto_id===projId && e.data===ds
+    && (setorId===null ? !e.setor_id : e.setor_id===setorId) && (!fm||e.medico_id===fm)); }
+function escDeDia(ds){ const projs=escProjetosVis(), fs=$('escfSetor').value, fm=$('escfMed').value;
+  return escalasAdm.filter(e=> e.data===ds && projs.some(p=>p.id===e.projeto_id) && (!fs||e.setor_id===fs) && (!fm||e.medico_id===fm)); }
 
 function abrirEscalaTab(){
   const optMed=medicos.filter(m=>m.papel==='medico').map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
@@ -647,43 +665,47 @@ function renderEscala(){
   else if(escView==='mes'){ $('escRange').textContent=rotuloMes(escAnchor); renderEscMensal(); }
   else { $('escRange').textContent=rotuloMes(escAnchor); renderEscCalendario(); }
 }
-function escChip(e){ return `<div class="esc-chip"><span>${e.medicos?.nome||'—'}${e.setores?.nome?(' · '+e.setores.nome):''}</span><a onclick="excluirEscala('${e.id}')" title="Remover">✕</a></div>`; }
+function escChipMed(e){ return `<div class="esc-chip"><span>${e.medicos?.nome||'—'}</span><a onclick="excluirEscala('${e.id}')" title="Remover">✕</a></div>`; }
+function escSArg(id){ return id?`'${id}'`:'null'; }
 
 function renderEscSemana(ini){
   const dias=[]; for(let i=0;i<7;i++){ const d=new Date(ini); d.setDate(ini.getDate()+i); dias.push(d); }
   const hoje=isoLocal(new Date()); const projs=escProjetosVis();
   if(!projs.length){ $('escCorpo').innerHTML='<div class="empty">Nenhum projeto ativo. Cadastre na aba Projetos.</div>'; return; }
-  $('escCorpo').innerHTML=projs.map(p=>{
-    const cols=dias.map((d,i)=>{ const ds=isoLocal(d); const its=escDe(p.id,ds);
+  let html='';
+  projs.forEach(p=> escBlocosDoProjeto(p).forEach(s=>{
+    const cols=dias.map((d,i)=>{ const ds=isoLocal(d); const its=escDeSetor(p.id,s.id,ds);
       return `<div class="esc-dcol"><div class="esc-dh">${ESCDOW[i]}<small>${d.getDate()}</small></div>
-        <div class="esc-cell${ds===hoje?' hoje':''}">${its.map(escChip).join('')}
-          <button class="esc-add" title="Escalar" onclick="abrirEscAdd('${p.id}','${ds}')">+</button></div></div>`; }).join('');
-    return `<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div><div class="esc-grid">${cols}</div></div>`;
-  }).join('');
+        <div class="esc-cell${ds===hoje?' hoje':''}">${its.map(escChipMed).join('')}
+          <button class="esc-add" title="Escalar" onclick="abrirEscAdd('${p.id}',${escSArg(s.id)},'${ds}')">+</button></div></div>`; }).join('');
+    html+=`<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}${s.nome?(' — '+s.nome):''}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div><div class="esc-grid">${cols}</div></div>`;
+  }));
+  $('escCorpo').innerHTML=html || '<div class="empty">Nenhum setor para este projeto.</div>';
 }
 function escVerSo(pid){ $('escfProj').value=pid; onEscfProj(); }
 function escMonthWeeks(y,m){ const start=escWeekStart(new Date(y,m,1)); const weeks=[]; let cur=new Date(start);
   for(let w=0;w<6;w++){ const row=[]; for(let i=0;i<7;i++){ row.push(new Date(cur)); cur.setDate(cur.getDate()+1);} weeks.push(row);} return weeks; }
 function escHeadDow(){ return '<div class="esc-mgrid">'+ESCDOW.map(d=>`<div class="esc-dh" style="border-radius:8px">${d}</div>`).join('')+'</div>'; }
-function escMiniChip(e){ return `<div class="esc-chip" style="margin-top:3px"><span>${e.medicos?.nome||'—'}</span><a onclick="excluirEscala('${e.id}')">✕</a></div>`; }
+function escMiniChipMed(e){ return `<div class="esc-chip" style="margin-top:3px"><span>${e.medicos?.nome||'—'}</span><a onclick="excluirEscala('${e.id}')">✕</a></div>`; }
+function escMiniChip(e){ return `<div class="esc-chip" style="margin-top:3px"><span>${e.medicos?.nome||'—'}${e.setores?.nome?(' · '+e.setores.nome):''}</span><a onclick="excluirEscala('${e.id}')">✕</a></div>`; }
 function renderEscMensal(){
   const y=escAnchor.getFullYear(), m=escAnchor.getMonth(), hoje=isoLocal(new Date());
   const projs=escProjetosVis();
   if(!projs.length){ $('escCorpo').innerHTML='<div class="empty">Nenhum projeto ativo.</div>'; return; }
-  const weeks=escMonthWeeks(y,m);
-  $('escCorpo').innerHTML=projs.map(p=>{
-    const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m, its=escDe(p.id,ds);
+  const weeks=escMonthWeeks(y,m); let html='';
+  projs.forEach(p=> escBlocosDoProjeto(p).forEach(s=>{
+    const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m, its=escDeSetor(p.id,s.id,ds);
       return `<div class="esc-mcell${out?' out':''}${ds===hoje?' hoje':''}">
-        <div style="display:flex;justify-content:space-between;align-items:center"><span class="dn">${d.getDate()}</span>${out?'':`<button class="esc-add" style="margin:0;width:22px;height:22px;padding:0" onclick="abrirEscAdd('${p.id}','${ds}')">+</button>`}</div>
-        ${its.map(escMiniChip).join('')}</div>`; }).join('')).join('');
-    return `<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div>${escHeadDow()}<div class="esc-mgrid" style="margin-top:5px">${grid}</div></div>`;
-  }).join('');
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="dn">${d.getDate()}</span>${out?'':`<button class="esc-add" style="margin:0;width:22px;height:22px;padding:0" onclick="abrirEscAdd('${p.id}',${escSArg(s.id)},'${ds}')">+</button>`}</div>
+        ${its.map(escMiniChipMed).join('')}</div>`; }).join('')).join('');
+    html+=`<div class="esc-proj"><div class="esc-proj-h"><b>${p.nome}${s.nome?(' — '+s.nome):''}</b><button class="sbtn" style="max-width:120px" onclick="escVerSo('${p.id}')">Ver só este ›</button></div>${escHeadDow()}<div class="esc-mgrid" style="margin-top:5px">${grid}</div></div>`;
+  }));
+  $('escCorpo').innerHTML=html || '<div class="empty">Nenhum setor para este projeto.</div>';
 }
 function renderEscCalendario(){
   const y=escAnchor.getFullYear(), m=escAnchor.getMonth(), hoje=isoLocal(new Date());
-  const projs=escProjetosVis(); const weeks=escMonthWeeks(y,m);
-  const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m;
-    let its=[]; projs.forEach(p=> its=its.concat(escDe(p.id,ds)));
+  const weeks=escMonthWeeks(y,m);
+  const grid=weeks.map(row=>row.map(d=>{ const ds=isoLocal(d), out=d.getMonth()!==m; const its=escDeDia(ds);
     return `<div class="esc-mcell${out?' out':''}${ds===hoje?' hoje':''}" style="min-height:86px">
       <div style="display:flex;justify-content:space-between;align-items:center"><span class="dn">${d.getDate()}</span>${out?'':`<button class="esc-add" style="margin:0;width:22px;height:22px;padding:0" onclick="abrirEscAddCal('${ds}')">+</button>`}</div>
       ${its.map(escMiniChip).join('')}</div>`; }).join('')).join('');
@@ -691,11 +713,14 @@ function renderEscCalendario(){
 }
 
 function escOptMed(){ return '<option value="">Selecione…</option>'+medicos.filter(m=>m.papel==='medico').map(m=>`<option value="${m.id}">${m.nome}</option>`).join(''); }
-function abrirEscAdd(projId, ds){
+function abrirEscAdd(projId, setorId, ds){
   escAddProj=projId; escAddData=ds; const p=projetos.find(x=>x.id===projId);
-  $('escAddSub').textContent=(p?p.nome+' · ':'')+ds.split('-').reverse().join('/');
+  const s=setorId?setores.find(x=>x.id===setorId):null;
+  $('escAddSub').textContent=(p?p.nome:'')+(s?(' · '+s.nome):'')+' · '+ds.split('-').reverse().join('/');
   $('eaProjWrap').style.display='none';
-  $('eaMed').innerHTML=escOptMed(); $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(projId,false);
+  $('eaMed').innerHTML=escOptMed();
+  $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(projId,false);
+  $('eaSetor').value=setorId||'';
   $('eaObs').value=''; $('eaErro').classList.add('hidden'); $('escAddM').classList.remove('hidden');
 }
 function abrirEscAddCal(ds){
@@ -973,14 +998,18 @@ function filtrados(){
 function renderLanc(){
   const tb=$('tbody'); const dados=filtrados();
   if(!dados.length){ tb.innerHTML='<tr><td colspan="10" class="empty">Nenhum lançamento.</td></tr>'; return; }
+  const sum=(its,c)=>its.reduce((s,i)=>s+Number(i[c]||0),0);
   tb.innerHTML=dados.map(l=>{
-    const it=(l.lancamento_itens||[])[0]||{};
+    const its=l.lancamento_itens||[];
+    const nomes=its.map(i=>i.nome).filter(Boolean).join(' + ')||'—';
+    const fatT=sum(its,'valor_faturamento'), repT=sum(its,'repasse');
+    const auxFatT=sum(its,'aux_faturamento'), auxRepT=sum(its,'aux_repasse');
     const foto = l.foto_path ? `<span class="foto" onclick="verFoto('${l.foto_path}')">Ver</span> · <span class="foto" onclick="baixarFoto('${l.foto_path}','${l.codigo_interno||'foto'}')">Baixar</span>` : '—';
-    const aux = l.medico_auxiliar_nome ? `${l.medico_auxiliar_nome}<div class="fat-only num" style="font-size:11px;color:var(--muted)">${brl(it.aux_faturamento)}</div><div class="num" style="font-size:11px;color:var(--muted)">${brl(it.aux_repasse)}</div>` : '—';
+    const aux = l.medico_auxiliar_nome ? `${l.medico_auxiliar_nome}<div class="fat-only num" style="font-size:11px;color:var(--muted)">${brl(auxFatT)}</div><div class="num" style="font-size:11px;color:var(--muted)">${brl(auxRepT)}</div>` : '—';
     return `<tr>
       <td class="codigo">${l.codigo_interno||'—'}<div style="margin-top:6px"><span class="foto" onclick="abrirEditarLanc('${l.id}')">Editar</span></div></td>
-      <td>${l.medicos?.nome||'—'}</td><td>${aux}</td><td>${nomeSetor(l.setor_id)}</td><td>${l.paciente_nome||'—'}</td><td>${it.nome||'—'}</td>
-      <td class="fat-only num">${brl(it.valor_faturamento)}</td><td class="num">${brl(it.repasse)}</td>
+      <td>${l.medicos?.nome||'—'}</td><td>${aux}</td><td>${nomeSetor(l.setor_id)}</td><td>${l.paciente_nome||'—'}</td><td>${nomes}</td>
+      <td class="fat-only num">${brl(fatT)}</td><td class="num">${brl(repT)}</td>
       <td>${fmtData(l.criado_em)}</td><td>${foto}</td></tr>`;
   }).join('');
 }
@@ -990,7 +1019,7 @@ async function baixarFoto(path,nome){ const {data}=await sb.storage.from('fotos'
   const a=document.createElement('a'); a.href=data.signedUrl; a.download=(nome||'foto')+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
 
 /* editar lançamento (gestor/operador) */
-let elLancId=null, elLancMedico=null, elSetorMedicos=[];
+let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
   const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
@@ -1001,10 +1030,14 @@ async function abrirEditarLanc(id){
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||'';
   const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
-  const it=(data.lancamento_itens||[])[0]||{};
+  const itens=data.lancamento_itens||[]; const it=itens[0]||{}; elLancNItens=itens.length;
   const doSetor=procsCat.filter(p=>p.setor_id===data.setor_id && (p.ativo || p.id===it.procedimento_id));
   $('elProc').innerHTML=doSetor.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
   if(it.procedimento_id) $('elProc').value=it.procedimento_id;
+  // lançamento com vários procedimentos: não permite trocar os itens por aqui (evita apagar os demais)
+  const multi = elLancNItens>1;
+  $('elProc').disabled = multi;
+  if(multi) $('elTitulo').textContent += ' · '+elLancNItens+' procedimentos';
   onElProcChange();
   if(data.medico_auxiliar_id) $('elAux').value=data.medico_auxiliar_id;
   $('editLancM').classList.remove('hidden');
@@ -1030,10 +1063,13 @@ async function salvarEditarLanc(){
   const b=$('elBtn'); b.disabled=true; b.textContent='Salvando…';
   const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, criado_em:dataISO+'T12:00:00', medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
   if(e1){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro: '+e1.message; $('elErro').classList.remove('hidden'); return; }
-  await sb.from('lancamento_itens').delete().eq('lancamento_id',elLancId);
-  const {error:e3}=await sb.from('lancamento_itens').insert({lancamento_id:elLancId, procedimento_id:proc});
+  // só mexe nos itens quando há 1 só (evita apagar procedimentos de um lançamento múltiplo)
+  if(elLancNItens<=1){
+    await sb.from('lancamento_itens').delete().eq('lancamento_id',elLancId);
+    const {error:e3}=await sb.from('lancamento_itens').insert({lancamento_id:elLancId, procedimento_id:proc});
+    if(e3){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro ao salvar item: '+e3.message; $('elErro').classList.remove('hidden'); return; }
+  }
   b.disabled=false; b.textContent='Salvar alterações';
-  if(e3){ $('elErro').textContent='Erro ao salvar item: '+e3.message; $('elErro').classList.remove('hidden'); return; }
   $('editLancM').classList.add('hidden'); await carregar();
 }
 
@@ -1096,18 +1132,22 @@ async function gravarLote(){
 /* ---------- HOME ---------- */
 function noMes(l){ const d=new Date(l.criado_em), n=new Date(); return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear(); }
 function renderHome(){
-  const dados=todos.filter(noMes);
+  const hp=$('homeProj');
+  if(hp && hp.options.length<=1 && projetos.length){ hp.innerHTML='<option value="">Todos os projetos</option>'+projetos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join(''); }
+  const fp=hp?hp.value:'';
+  let dados=todos.filter(noMes);
+  if(fp) dados=dados.filter(l=>(l.setores?.projeto_id||'')===fp);
   $('kLanc').textContent=dados.length;
   let proc=0; dados.forEach(l=>proc+=(l.lancamento_itens||[]).length);
   let fat=0,rep=0; const agg={};
-  participacoes(dados).forEach(p=>{ fat+=p.fat; rep+=p.rep; agg[p.nome]=agg[p.nome]||{proc:0,fat:0,rep:0};
-    agg[p.nome].proc++; agg[p.nome].fat+=p.fat; agg[p.nome].rep+=p.rep; });
+  participacoes(dados).forEach(p=>{ fat+=p.fat; rep+=p.rep; const a=agg[p.nome]=agg[p.nome]||{pp:0,pa:0,fat:0,rep:0};
+    if(p.isAux) a.pa++; else a.pp++; a.fat+=p.fat; a.rep+=p.rep; });
   $('kProc').textContent=proc; $('kFat').textContent=brl(fat); $('kRep').textContent=brl(rep);
   const ents=Object.entries(agg).sort((a,b)=>b[1].rep-a[1].rep);
   const pm=$('porMedico');
   if(!ents.length){ pm.innerHTML='<div class="empty">Nenhum lançamento no mês.</div>'; return; }
-  pm.innerHTML=`<table class="hm"><thead><tr><th>Médico</th><th class="num">Procedimentos</th><th class="num">Repasse</th><th class="num fat-only">Faturamento</th></tr></thead><tbody>`+
-    ents.map(([n,v])=>`<tr><td>${n}</td><td class="num">${v.proc}</td><td class="num">${brl(v.rep)}</td><td class="num fat-only">${brl(v.fat)}</td></tr>`).join('')+`</tbody></table>`;
+  pm.innerHTML=`<table class="hm"><thead><tr><th>Médico</th><th class="num">Proc. principal</th><th class="num">Proc. auxiliar</th><th class="num">Repasse</th><th class="num fat-only">Faturamento</th></tr></thead><tbody>`+
+    ents.map(([n,v])=>`<tr><td>${n}</td><td class="num">${v.pp}</td><td class="num">${v.pa}</td><td class="num">${brl(v.rep)}</td><td class="num fat-only">${brl(v.fat)}</td></tr>`).join('')+`</tbody></table>`;
 }
 
 /* ---------- RELATÓRIOS ---------- */
@@ -1161,16 +1201,16 @@ function mProdMedica(){
   return {custom:'prodmedica', titulo:'Produtividade médica', base:'Produtividade_medica', colsDef, blocos, totProc:blocos.reduce((s,b)=>s+b.nProc,0), totRep:blocos.reduce((s,b)=>s+b.tRep,0)};
 }
 function mFinanceiro(){
-  const cols=[{label:'Médico'},{label:'CRM'},{label:'CPF'},{label:'Chave PIX'},{label:'Procedimentos'},{label:'Valor a pagar',money:1},{label:'Status do contrato'}];
+  const cols=[{label:'Médico'},{label:'CRM'},{label:'CPF'},{label:'Chave PIX'},{label:'Proc. principal'},{label:'Proc. auxiliar'},{label:'Valor a pagar',money:1},{label:'Status do contrato'}];
   const agg={};
   participacoes(dadosRel()).forEach(p=>{ const m=medById(p.medId)||{}; const k=p.medId||p.nome;
-    agg[k]=agg[k]||{nome:p.nome,crm:p.crm||m.crm||'',cpf:m.cpf||'',pix:m.pix_chave||'',status:m.status_contrato||'',proc:0,rep:0};
-    agg[k].proc++; agg[k].rep+=p.rep; });
+    agg[k]=agg[k]||{nome:p.nome,crm:p.crm||m.crm||'',cpf:m.cpf||'',pix:m.pix_chave||'',status:m.status_contrato||'',pp:0,pa:0,rep:0};
+    if(p.isAux) agg[k].pa++; else agg[k].pp++; agg[k].rep+=p.rep; });
   const rows=Object.values(agg).sort((a,b)=>a.nome.localeCompare(b.nome)).map(v=>
-    ({'Médico':v.nome,'CRM':v.crm,'CPF':v.cpf,'Chave PIX':v.pix,'Procedimentos':v.proc,'Valor a pagar':+v.rep.toFixed(2),'Status do contrato':v.status||'—'}));
-  const tot=rows.reduce((s,r)=>{s.p+=r['Procedimentos'];s.v+=r['Valor a pagar'];return s;},{p:0,v:0});
-  rows.push({'Médico':'TOTAL GERAL','CRM':'','CPF':'','Chave PIX':'','Procedimentos':tot.p,'Valor a pagar':+tot.v.toFixed(2),'Status do contrato':''});
-  return {titulo:'Financeiro consolidado',base:'Financeiro_consolidado',cols,rows,resumo:{fat:false,rep:true},widths:[{wch:26},{wch:10},{wch:16},{wch:30},{wch:14},{wch:14},{wch:22}]};
+    ({'Médico':v.nome,'CRM':v.crm,'CPF':v.cpf,'Chave PIX':v.pix,'Proc. principal':v.pp,'Proc. auxiliar':v.pa,'Valor a pagar':+v.rep.toFixed(2),'Status do contrato':v.status||'—'}));
+  const tot=rows.reduce((s,r)=>{s.pp+=r['Proc. principal'];s.pa+=r['Proc. auxiliar'];s.v+=r['Valor a pagar'];return s;},{pp:0,pa:0,v:0});
+  rows.push({'Médico':'TOTAL GERAL','CRM':'','CPF':'','Chave PIX':'','Proc. principal':tot.pp,'Proc. auxiliar':tot.pa,'Valor a pagar':+tot.v.toFixed(2),'Status do contrato':''});
+  return {titulo:'Financeiro consolidado',base:'Financeiro_consolidado',cols,rows,resumo:{fat:false,rep:true},widths:[{wch:26},{wch:10},{wch:16},{wch:30},{wch:14},{wch:14},{wch:14},{wch:22}]};
 }
 
 /* participações: cada procedimento gera 1 linha para o médico principal
