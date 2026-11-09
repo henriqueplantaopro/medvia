@@ -409,6 +409,7 @@
     <div class="ed-acts">
       <button class="btn btn-green" id="elBtn" onclick="salvarEditarLanc()">Salvar alterações</button>
       <button class="btn" style="background:var(--line)" onclick="$('editLancM').classList.add('hidden')">Cancelar</button>
+      <button class="btn" style="background:#c0392b;color:#fff;margin-left:auto" onclick="excluirLancAdm()">Excluir</button>
     </div>
   </div>
 </div>
@@ -442,7 +443,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.08 · medvia-13';
+const APP_VERSION='2026.11.09 · medvia-14';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -1113,6 +1114,13 @@ async function salvarEditarLanc(){
     if(e3){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro ao salvar item: '+e3.message; $('elErro').classList.remove('hidden'); return; }
   }
   b.disabled=false; b.textContent='Salvar alterações';
+  $('editLancM').classList.add('hidden'); await carregar();
+}
+async function excluirLancAdm(){
+  if(!elLancId) return;
+  if(!confirm('Excluir este lançamento definitivamente? Esta ação não pode ser desfeita.')) return;
+  const {error}=await sb.from('lancamentos').delete().eq('id',elLancId);
+  if(error){ $('elErro').textContent='Erro ao excluir: '+error.message; $('elErro').classList.remove('hidden'); return; }
   $('editLancM').classList.add('hidden'); await carregar();
 }
 
