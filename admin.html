@@ -424,7 +424,7 @@
     <div class="edgrid">
       <div class="edf full" id="eaProjWrap" style="display:none"><label>Projeto</label><select id="eaProj" onchange="onEaProj()"></select></div>
       <div class="edf full"><label>Médico</label><select id="eaMed"></select></div>
-      <div class="edf full"><label>Setor (opcional)</label><select id="eaSetor"><option value="">—</option></select></div>
+      <div class="edf full"><label>Setor</label><select id="eaSetor"><option value="">Selecione o setor…</option></select></div>
       <div class="edf full"><label>Observação (opcional)</label><input id="eaObs" type="text" placeholder="Ex.: Sobreaviso"></div>
     </div>
     <div id="eaErro" class="err hidden"></div>
@@ -445,7 +445,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.09 · medvia-15';
+const APP_VERSION='2026.11.09 · medvia-16';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -723,24 +723,26 @@ function abrirEscAdd(projId, setorId, ds){
   $('escAddSub').textContent=(p?p.nome:'')+(s?(' · '+s.nome):'')+' · '+ds.split('-').reverse().join('/');
   $('eaProjWrap').style.display='none';
   $('eaMed').innerHTML=escOptMed();
-  $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(projId,false);
+  $('eaSetor').innerHTML='<option value="">Selecione o setor…</option>'+optsSetor(projId,false);
   $('eaSetor').value=setorId||'';
   $('eaObs').value=''; $('eaErro').classList.add('hidden'); $('escAddM').classList.remove('hidden');
 }
 function abrirEscAddCal(ds){
   escAddData=ds; escAddProj=$('escfProj').value||null;
   $('escAddSub').textContent=ds.split('-').reverse().join('/');
-  if(escAddProj){ $('eaProjWrap').style.display='none'; $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(escAddProj,false); }
-  else { $('eaProjWrap').style.display=''; $('eaProj').innerHTML='<option value="">Selecione o projeto…</option>'+projetos.filter(p=>p.ativo).map(p=>`<option value="${p.id}">${p.nome}</option>`).join(''); $('eaSetor').innerHTML='<option value="">—</option>'; }
+  if(escAddProj){ $('eaProjWrap').style.display='none'; $('eaSetor').innerHTML='<option value="">Selecione o setor…</option>'+optsSetor(escAddProj,false); }
+  else { $('eaProjWrap').style.display=''; $('eaProj').innerHTML='<option value="">Selecione o projeto…</option>'+projetos.filter(p=>p.ativo).map(p=>`<option value="${p.id}">${p.nome}</option>`).join(''); $('eaSetor').innerHTML='<option value="">Selecione o setor…</option>'; }
   $('eaMed').innerHTML=escOptMed(); $('eaObs').value=''; $('eaErro').classList.add('hidden'); $('escAddM').classList.remove('hidden');
 }
-function onEaProj(){ escAddProj=$('eaProj').value; $('eaSetor').innerHTML='<option value="">—</option>'+optsSetor(escAddProj,false); }
+function onEaProj(){ escAddProj=$('eaProj').value; $('eaSetor').innerHTML='<option value="">Selecione o setor…</option>'+optsSetor(escAddProj,false); }
 async function salvarEscAdd(){
   $('eaErro').classList.add('hidden');
   const proj = escAddProj || ($('eaProj')?$('eaProj').value:''); const med=$('eaMed').value;
   if(!proj){ $('eaErro').textContent='Selecione o projeto.'; $('eaErro').classList.remove('hidden'); return; }
   if(!med){ $('eaErro').textContent='Selecione o médico.'; $('eaErro').classList.remove('hidden'); return; }
-  const row={medico_id:med, projeto_id:proj, setor_id:$('eaSetor').value||null, data:escAddData, observacao:$('eaObs').value.trim()||null};
+  const setor=$('eaSetor').value;
+  if(!setor){ $('eaErro').textContent='Selecione o setor (obrigatório).'; $('eaErro').classList.remove('hidden'); return; }
+  const row={medico_id:med, projeto_id:proj, setor_id:setor, data:escAddData, observacao:$('eaObs').value.trim()||null};
   const {error}=await sb.from('escalas').insert(row);
   if(error){ $('eaErro').textContent='Erro: '+error.message; $('eaErro').classList.remove('hidden'); return; }
   $('escAddM').classList.add('hidden'); recarregarEscala();
