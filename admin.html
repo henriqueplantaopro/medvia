@@ -399,9 +399,11 @@
 <div id="editLancM" class="modal hidden">
   <div class="modal-card" style="max-width:520px">
     <h2 id="elTitulo">Editar lançamento</h2>
+    <p class="sub" id="elLancadoPor" style="margin:-8px 0 14px"></p>
     <div class="edgrid">
       <div class="edf"><label>Paciente</label><input id="elPac" type="text"></div>
       <div class="edf"><label>Data</label><input id="elData" type="date"></div>
+      <div class="edf full"><label>Médico principal</label><select id="elMedPrinc" onchange="onElMedPrincChange()"></select></div>
       <div class="edf full"><label>Procedimento</label><select id="elProc" onchange="onElProcChange()"></select></div>
       <div class="edf full hidden" id="elAuxWrap"><label id="elAuxLabel">Médico auxiliar</label><select id="elAux"></select></div>
     </div>
@@ -443,7 +445,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.09 · medvia-14';
+const APP_VERSION='2026.11.09 · medvia-15';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -980,7 +982,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -1069,8 +1071,16 @@ async function abrirEditarLanc(id){
   const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
   if(error||!data) return alert('Erro ao abrir.');
   elLancId=id; elLancMedico=data.medico_id;
-  const {data:ms}=await sb.from('medico_setores').select('medico_id').eq('setor_id',data.setor_id);
-  elSetorMedicos=(ms||[]).map(x=>x.medico_id);
+  // médicos habilitados em qualquer setor do MESMO PROJETO do lançamento
+  const sObj=setores.find(s=>s.id===data.setor_id); const projId=sObj?sObj.projeto_id:null;
+  const setorIds=setores.filter(s=>!projId||s.projeto_id===projId).map(s=>s.id);
+  const {data:ms}=await sb.from('medico_setores').select('medico_id').in('setor_id', setorIds.length?setorIds:['00000000-0000-0000-0000-000000000000']);
+  elSetorMedicos=[...new Set((ms||[]).map(x=>x.medico_id))];
+  // médico principal (médicos ativos do projeto; garante incluir o atual)
+  const principais=medicos.filter(m=>m.papel==='medico' && m.ativo!==false && (elSetorMedicos.includes(m.id) || m.id===data.medico_id));
+  $('elMedPrinc').innerHTML=principais.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  $('elMedPrinc').value=data.medico_id||'';
+  $('elLancadoPor').textContent = data.criador?.nome ? ('Lançado por: '+data.criador.nome) : '';
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||'';
   const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
@@ -1086,6 +1096,7 @@ async function abrirEditarLanc(id){
   if(data.medico_auxiliar_id) $('elAux').value=data.medico_auxiliar_id;
   $('editLancM').classList.remove('hidden');
 }
+function onElMedPrincChange(){ elLancMedico=$('elMedPrinc').value; onElProcChange(); }
 function onElProcChange(){
   const p=procsCat.find(x=>x.id===$('elProc').value);
   const wrap=$('elAuxWrap'), sel=$('elAux');
@@ -1099,13 +1110,16 @@ function onElProcChange(){
 async function salvarEditarLanc(){
   $('elErro').classList.add('hidden');
   const pac=$('elPac').value.trim(), proc=$('elProc').value, dataISO=$('elData').value;
+  const princ=$('elMedPrinc').value;
   if(!pac||!proc||!dataISO){ $('elErro').textContent='Preencha paciente, procedimento e data.'; $('elErro').classList.remove('hidden'); return; }
+  if(!princ){ $('elErro').textContent='Selecione o médico principal.'; $('elErro').classList.remove('hidden'); return; }
   const p=procsCat.find(x=>x.id===proc)||{}; const regra=p.aux_regra||'bloqueado';
   const aux = (regra==='bloqueado') ? '' : $('elAux').value;
   if(regra==='obrigatorio' && !aux){ $('elErro').textContent='Este procedimento exige médico auxiliar.'; $('elErro').classList.remove('hidden'); return; }
+  if(aux && aux===princ){ $('elErro').textContent='O auxiliar não pode ser o mesmo que o principal.'; $('elErro').classList.remove('hidden'); return; }
   const auxNome = aux ? (medById(aux)?.nome||null) : null;
   const b=$('elBtn'); b.disabled=true; b.textContent='Salvando…';
-  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, criado_em:dataISO+'T12:00:00', medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
+  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, criado_em:dataISO+'T12:00:00', medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
   if(e1){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro: '+e1.message; $('elErro').classList.remove('hidden'); return; }
   // só mexe nos itens quando há 1 só (evita apagar procedimentos de um lançamento múltiplo)
   if(elLancNItens<=1){
