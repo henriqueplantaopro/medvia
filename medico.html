@@ -210,6 +210,10 @@
           <label>Nome do paciente</label>
           <input id="paciente" type="text" autocomplete="off">
         </div>
+        <div class="field">
+          <label>CPF do paciente</label>
+          <input id="pacienteCpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="mascaraCpf(this)">
+        </div>
         <div class="field" id="setorWrap">
           <label>Setor</label>
           <select id="selSetor" onchange="onSetorChange()"><option value="">Selecione o setor…</option></select>
@@ -319,8 +323,18 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.09 · medvia-14';
+const APP_VERSION = '2026.11.10 · medvia-15';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
+
+/* ---------- CPF ---------- */
+function soDigitos(s){ return String(s||'').replace(/\D/g,''); }
+function mascaraCpf(el){ let v=soDigitos(el.value).slice(0,11);
+  v=v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  el.value=v; }
+function cpfValido(cpf){ cpf=soDigitos(cpf);
+  if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let s=0; for(let i=0;i<9;i++) s+=(+cpf[i])*(10-i); let d1=(s*10)%11; if(d1===10) d1=0; if(d1!==+cpf[9]) return false;
+  s=0; for(let i=0;i<10;i++) s+=(+cpf[i])*(11-i); let d2=(s*10)%11; if(d2===10) d2=0; return d2===+cpf[10]; }
 
 let perfil = null;
 let procs = [];            // catálogo acessível (id, nome, repasse, setor_id, aux_regra, aux_repasse…)
@@ -659,7 +673,7 @@ function novoLancamento(){
   if(!setoresMed.length){ toast('Nenhum setor habilitado para você. Solicite ao gestor.'); return; }
   restaurarFormulario();
   editId=null;
-  $('paciente').value=''; $('obs').value='';
+  $('paciente').value=''; $('pacienteCpf').value=''; $('obs').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
   $('selSetor').disabled = (setoresMed.length===1);
   onSetorChange();
@@ -672,13 +686,13 @@ function novoLancamento(){
 }
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
+    .select('id,codigo_interno,paciente_nome,paciente_cpf,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 24 horas encerrado. Solicite ao gestor.'); carregarLista(); return; }
   restaurarFormulario();
   editId=id;
-  $('paciente').value=data.paciente_nome||''; $('obs').value=data.observacao||'';
+  $('paciente').value=data.paciente_nome||''; $('pacienteCpf').value=data.paciente_cpf||''; $('obs').value=data.observacao||'';
   if($('selSetor')){ $('selSetor').value=data.setor_id||''; $('selSetor').disabled=true; }
   await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
   procsSelec=(data.lancamento_itens||[]).map(it=>({id:it.procedimento_id, nome:it.nome||(procs.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
@@ -752,8 +766,11 @@ async function salvar(){
   if(!procsSelec.length) return showErr('novoErr','Adicione pelo menos um procedimento.');
 
   const pac=$('paciente').value.trim(), obs=$('obs').value.trim();
+  const cpf=$('pacienteCpf').value.trim();
   const setor=$('selSetor') ? $('selSetor').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
+  if(!soDigitos(cpf)) return showErr('novoErr','Informe o CPF do paciente.');
+  if(!cpfValido(cpf)) return showErr('novoErr','CPF do paciente inválido. Confira os números.');
   if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
   const regra = regraDaLista();
   const outro = (regra==='bloqueado') ? '' : ($('selAux') ? $('selAux').value : '');
@@ -771,12 +788,12 @@ async function salvar(){
   try{
     let lancId=editId;
     if(editId){
-      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
+      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
       if(e1) throw e1;
       const {error:e2}=await sb.from('lancamento_itens').delete().eq('lancamento_id',editId);
       if(e2) throw e2;
     } else {
-      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
+      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, paciente_cpf:cpf, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
         .select('id,codigo_interno').single();
       if(e0) throw e0;
       lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
