@@ -294,6 +294,7 @@
         <div style="border-top:1px solid var(--line);margin:4px 0 14px"></div>
         <div class="filters">
           <div><label>Nome</label><input id="pNome" type="text" placeholder="Nome do procedimento"></div>
+          <div><label>Código SIGTAP (opcional)</label><input id="pSigtap" type="text" placeholder="Ex.: 04.08.01.009-5"></div>
           <div class="fat-only"><label>Faturamento (R$)</label><input id="pFat" type="number" step="0.01" placeholder="0,00"></div>
           <div><label>Repasse (R$)</label><input id="pRep" type="number" step="0.01" placeholder="0,00"></div>
         </div>
@@ -315,8 +316,8 @@
         <div id="pErro" class="err hidden"></div>
         <div style="overflow:auto">
           <table class="hm">
-            <thead><tr><th>Procedimento</th><th class="num fat-only">Faturamento</th><th class="num">Repasse</th><th>Auxiliar</th><th>Status</th><th></th></tr></thead>
-            <tbody id="procBody"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+            <thead><tr><th>Procedimento</th><th>SIGTAP</th><th class="num fat-only">Faturamento</th><th class="num">Repasse</th><th>Auxiliar</th><th>Status</th><th></th></tr></thead>
+            <tbody id="procBody"><tr><td colspan="7" class="empty">Carregando…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -446,7 +447,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.10 · medvia-17';
+const APP_VERSION='2026.11.10 · medvia-18';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -926,14 +927,14 @@ function setorSelecionadoProc(){ return $('pSetor')?.value||''; }
 function renderProc(){
   const body=$('procBody');
   const setorId=setorSelecionadoProc();
-  if(!projetos.length){ body.innerHTML='<tr><td colspan="6" class="empty">Crie um projeto e um setor primeiro (aba Projetos).</td></tr>'; return; }
-  if(!setorId){ body.innerHTML='<tr><td colspan="6" class="empty">Selecione o setor acima.</td></tr>'; return; }
+  if(!projetos.length){ body.innerHTML='<tr><td colspan="7" class="empty">Crie um projeto e um setor primeiro (aba Projetos).</td></tr>'; return; }
+  if(!setorId){ body.innerHTML='<tr><td colspan="7" class="empty">Selecione o setor acima.</td></tr>'; return; }
   const arr=procsCat.filter(p=>p.setor_id===setorId);
-  if(!arr.length){ body.innerHTML='<tr><td colspan="6" class="empty">Nenhum procedimento neste setor.</td></tr>'; return; }
+  if(!arr.length){ body.innerHTML='<tr><td colspan="7" class="empty">Nenhum procedimento neste setor.</td></tr>'; return; }
   const auxTxt=p=>{ if((p.aux_regra||'bloqueado')==='bloqueado') return '—';
     const lbl=p.aux_regra==='obrigatorio'?'Obrigatório':'Opcional'; return `${lbl} · ${brl(p.aux_repasse)}`; };
   body.innerHTML=arr.map(p=>`<tr>
-    <td>${p.nome}</td><td class="num fat-only">${brl(p.valor_faturamento)}</td><td class="num">${brl(p.repasse)}</td>
+    <td>${p.nome}</td><td>${p.codigo_sigtap||'—'}</td><td class="num fat-only">${brl(p.valor_faturamento)}</td><td class="num">${brl(p.repasse)}</td>
     <td>${auxTxt(p)}</td>
     <td>${p.ativo?'<span class="badge2 on">Ativo</span>':'<span class="badge2 off">Inativo</span>'}</td>
     <td style="white-space:nowrap">
@@ -964,7 +965,7 @@ async function salvarProc(){
     if(isNaN(auxRep)) auxRep=0;
     if(isNaN(auxFat)){ auxFat = EH_OPERADOR ? (procEdit?Number(procsCat.find(x=>x.id===procEdit)?.aux_faturamento||0):0) : 0; }
   }
-  const payload={nome,valor_faturamento:fat,repasse:rep,setor_id:setorId,aux_regra:auxRegra,aux_faturamento:auxFat,aux_repasse:auxRep};
+  const payload={nome,codigo_sigtap:($('pSigtap').value.trim()||null),valor_faturamento:fat,repasse:rep,setor_id:setorId,aux_regra:auxRegra,aux_faturamento:auxFat,aux_repasse:auxRep};
   let error;
   if(procEdit){ ({error}=await sb.from('procedimentos').update(payload).eq('id',procEdit)); }
   else { ({error}=await sb.from('procedimentos').insert(payload)); }
@@ -975,10 +976,10 @@ function showPErro(m){ $('pErro').textContent=m; $('pErro').classList.remove('hi
 function editarProc(id){ const p=procsCat.find(x=>x.id===id); if(!p) return; procEdit=id;
   const s=setores.find(x=>x.id===p.setor_id);
   if(s){ $('pProj').value=s.projeto_id; $('pSetor').innerHTML=optsSetor(s.projeto_id,false); $('pSetor').value=s.id; }
-  $('pNome').value=p.nome; $('pFat').value=p.valor_faturamento; $('pRep').value=p.repasse;
+  $('pNome').value=p.nome; $('pSigtap').value=p.codigo_sigtap||''; $('pFat').value=p.valor_faturamento; $('pRep').value=p.repasse;
   $('pAuxRegra').value=p.aux_regra||'bloqueado'; $('pAuxFat').value=(p.aux_faturamento??''); $('pAuxRep').value=(p.aux_repasse??''); onAuxRegraChange();
   $('pBtn').textContent='Salvar'; $('pCancel').classList.remove('hidden'); window.scrollTo(0,0); renderProc(); }
-function cancelarProc(){ procEdit=null; $('pNome').value=''; $('pFat').value=''; $('pRep').value='';
+function cancelarProc(){ procEdit=null; $('pNome').value=''; $('pSigtap').value=''; $('pFat').value=''; $('pRep').value='';
   $('pAuxRegra').value='bloqueado'; $('pAuxFat').value=''; $('pAuxRep').value=''; onAuxRegraChange();
   $('pBtn').textContent='Adicionar'; $('pCancel').classList.add('hidden'); $('pErro').classList.add('hidden'); }
 async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
@@ -988,7 +989,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(procedimento_id,nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -1246,11 +1247,12 @@ function chavePaciente(l){ const cpf=soDigitos(l.paciente_cpf); if(cpf) return '
   return 'nm:'+String(l.paciente_nome||'').trim().replace(/\s+/g,' ').toLowerCase(); }
 function agrupaCirurgias(dados){
   const map=new Map();
+  const sigMap={}; (procsCat||[]).forEach(p=>{ sigMap[p.id]=p.codigo_sigtap||''; });
   (dados||[]).forEach(l=>{ const d=new Date(l.criado_em);
     const dia=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
     const key=dia+'|'+chavePaciente(l);
     let g=map.get(key);
-    if(!g){ g={primeira:l.criado_em,codigos:[],procs:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
+    if(!g){ g={primeira:l.criado_em,codigos:[],procs:[],sigtaps:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
     if(new Date(l.criado_em)<new Date(g.primeira)) g.primeira=l.criado_em;
     if(l.codigo_interno && !g.codigos.includes(l.codigo_interno)) g.codigos.push(l.codigo_interno);
     const nm=l.medicos?.nome||''; if(nm && !g.medicos.includes(nm)){ g.medicos.push(nm); g.crms.push(l.medicos?.crm||''); }
@@ -1258,6 +1260,7 @@ function agrupaCirurgias(dados){
     const temAux=!!l.medico_auxiliar_id, auxNome=l.medico_auxiliar_nome||'';
     if(temAux && auxNome && !g.auxNomes.includes(auxNome)) g.auxNomes.push(auxNome);
     (l.lancamento_itens||[]).forEach(it=>{ g.nItens++; g.procs.push(it.nome||'');
+      const sg=sigMap[it.procedimento_id]; if(sg && !g.sigtaps.includes(sg)) g.sigtaps.push(sg);
       g.fat += Number(it.valor_faturamento||0) + (temAux?Number(it.aux_faturamento||0):0);
       g.rep += Number(it.repasse||0);
       g.repAux += temAux?Number(it.aux_repasse||0):0; });
@@ -1272,19 +1275,19 @@ function montarRelatorio(){
   if(tipo==='financeiro') return mFinanceiro();
 }
 function mDetalhe(){
-  const cols=[{label:'Código'},{label:'Data'},{label:'Médico'},{label:'CRM'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'Nº proced.'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Médico auxiliar'},{label:'Repasse auxiliar',money:1}];
+  const cols=[{label:'Código'},{label:'Data'},{label:'Médico'},{label:'CRM'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Médico auxiliar'},{label:'Repasse auxiliar',money:1}];
   const grupos=agrupaCirurgias(dadosRel());
-  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Médico auxiliar':g.auxNomes.join(' + '),'Repasse auxiliar':+g.repAux.toFixed(2)}));
-  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:9},{wch:14},{wch:14},{wch:24},{wch:16}]};
+  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Médico auxiliar':g.auxNomes.join(' + '),'Repasse auxiliar':+g.repAux.toFixed(2)}));
+  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:20},{wch:9},{wch:14},{wch:14},{wch:24},{wch:16}]};
 }
 function mFaturamento(){
-  const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'Nº proced.'},{label:'Médico'},{label:'Faturamento',money:1}];
+  const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Médico'},{label:'Faturamento',money:1}];
   const grupos=agrupaCirurgias(dadosRel());
   const rows=[]; let n=0,t=0,np=0;
   grupos.forEach(g=>{ n++; t+=g.fat; np+=g.nItens;
-    rows.push({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'Nº proced.':g.nItens,'Médico':g.medicos.join(' + '),'Faturamento':+g.fat.toFixed(2)}); });
-  rows.push({'Código':'TOTAL','Data':'','Paciente':`${n} cirurgia(s)`,'CPF':'','Procedimento':'','Nº proced.':np,'Médico':'','Faturamento':+t.toFixed(2)});
-  return {titulo:'Faturamento',base:'Faturamento',cols,rows,resumo:{fat:true,rep:false,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:16},{wch:42},{wch:9},{wch:24},{wch:14}]};
+    rows.push({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens,'Médico':g.medicos.join(' + '),'Faturamento':+g.fat.toFixed(2)}); });
+  rows.push({'Código':'TOTAL','Data':'','Paciente':`${n} cirurgia(s)`,'CPF':'','Procedimento':'','SIGTAP':'','Nº proced.':np,'Médico':'','Faturamento':+t.toFixed(2)});
+  return {titulo:'Faturamento',base:'Faturamento',cols,rows,resumo:{fat:true,rep:false,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:16},{wch:42},{wch:20},{wch:9},{wch:24},{wch:14}]};
 }
 function mProdMedica(){
   const colsDef=[{label:'Data'},{label:'Código'},{label:'Paciente'},{label:'Procedimento'},{label:'Repasse',money:1}];
