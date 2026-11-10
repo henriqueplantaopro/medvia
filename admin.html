@@ -402,6 +402,7 @@
     <p class="sub" id="elLancadoPor" style="margin:-8px 0 14px"></p>
     <div class="edgrid">
       <div class="edf"><label>Paciente</label><input id="elPac" type="text"></div>
+      <div class="edf"><label>CPF do paciente</label><input id="elCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" oninput="mascaraCpf(this)"></div>
       <div class="edf"><label>Data</label><input id="elData" type="date"></div>
       <div class="edf full"><label>Médico principal</label><select id="elMedPrinc" onchange="onElMedPrincChange()"></select></div>
       <div class="edf full"><label>Procedimento</label><select id="elProc" onchange="onElProcChange()"></select></div>
@@ -445,7 +446,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.09 · medvia-16';
+const APP_VERSION='2026.11.10 · medvia-17';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -453,6 +454,9 @@ const brl = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:
 function isoLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtData(iso){ return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function fmtDataDia(iso){ return new Date(iso).toLocaleDateString('pt-BR'); }
+function soDigitos(s){ return String(s||'').replace(/\D/g,''); }
+function mascaraCpf(el){ let v=soDigitos(el.value).slice(0,11);
+  v=v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2'); el.value=v; }
 function primeiroDiaMes(){ const n=new Date(); return isoLocal(new Date(n.getFullYear(),n.getMonth(),1)); }
 function ultimoDiaMes(){ const n=new Date(); return isoLocal(new Date(n.getFullYear(),n.getMonth()+1,0)); }
 
@@ -984,7 +988,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -1070,7 +1074,7 @@ async function baixarFotosPdf(id, btn){
 let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
-  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
+  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
   if(error||!data) return alert('Erro ao abrir.');
   elLancId=id; elLancMedico=data.medico_id;
   // médicos habilitados em qualquer setor do MESMO PROJETO do lançamento
@@ -1084,7 +1088,7 @@ async function abrirEditarLanc(id){
   $('elMedPrinc').value=data.medico_id||'';
   $('elLancadoPor').textContent = data.criador?.nome ? ('Lançado por: '+data.criador.nome) : '';
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
-  $('elPac').value=data.paciente_nome||'';
+  $('elPac').value=data.paciente_nome||''; $('elCpf').value=data.paciente_cpf||'';
   const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
   const itens=data.lancamento_itens||[]; const it=itens[0]||{}; elLancNItens=itens.length;
   const doSetor=procsCat.filter(p=>p.setor_id===data.setor_id && (p.ativo || p.id===it.procedimento_id));
@@ -1112,6 +1116,7 @@ function onElProcChange(){
 async function salvarEditarLanc(){
   $('elErro').classList.add('hidden');
   const pac=$('elPac').value.trim(), proc=$('elProc').value, dataISO=$('elData').value;
+  const cpf=$('elCpf').value.trim();
   const princ=$('elMedPrinc').value;
   if(!pac||!proc||!dataISO){ $('elErro').textContent='Preencha paciente, procedimento e data.'; $('elErro').classList.remove('hidden'); return; }
   if(!princ){ $('elErro').textContent='Selecione o médico principal.'; $('elErro').classList.remove('hidden'); return; }
@@ -1121,7 +1126,7 @@ async function salvarEditarLanc(){
   if(aux && aux===princ){ $('elErro').textContent='O auxiliar não pode ser o mesmo que o principal.'; $('elErro').classList.remove('hidden'); return; }
   const auxNome = aux ? (medById(aux)?.nome||null) : null;
   const b=$('elBtn'); b.disabled=true; b.textContent='Salvando…';
-  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, criado_em:dataISO+'T12:00:00', medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
+  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf||null, criado_em:dataISO+'T12:00:00', medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
   if(e1){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro: '+e1.message; $('elErro').classList.remove('hidden'); return; }
   // só mexe nos itens quando há 1 só (evita apagar procedimentos de um lançamento múltiplo)
   if(elLancNItens<=1){
@@ -1234,6 +1239,31 @@ function dadosRel(){
 function fmtPeriodo(){ const de=$('relDe').value, ate=$('relAte').value; return (de?fmtDataDia(de+'T12:00'):'início')+' a '+(ate?fmtDataDia(ate+'T12:00'):'hoje'); }
 function nomeArq(base){ const de=$('relDe').value||'', ate=$('relAte').value||''; return `MedVia_${base}_${de}_a_${ate}.xlsx`; }
 
+/* agrupa lançamentos em "cirurgias": mesmo paciente (CPF, senão nome
+   normalizado) no mesmo dia vira UMA linha. Soma TODOS os procedimentos
+   do grupo — por isso a soma das linhas passa a bater com o total. */
+function chavePaciente(l){ const cpf=soDigitos(l.paciente_cpf); if(cpf) return 'cpf:'+cpf;
+  return 'nm:'+String(l.paciente_nome||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+function agrupaCirurgias(dados){
+  const map=new Map();
+  (dados||[]).forEach(l=>{ const d=new Date(l.criado_em);
+    const dia=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+    const key=dia+'|'+chavePaciente(l);
+    let g=map.get(key);
+    if(!g){ g={primeira:l.criado_em,codigos:[],procs:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
+    if(new Date(l.criado_em)<new Date(g.primeira)) g.primeira=l.criado_em;
+    if(l.codigo_interno && !g.codigos.includes(l.codigo_interno)) g.codigos.push(l.codigo_interno);
+    const nm=l.medicos?.nome||''; if(nm && !g.medicos.includes(nm)){ g.medicos.push(nm); g.crms.push(l.medicos?.crm||''); }
+    if(l.paciente_cpf && !g.cpfs.includes(l.paciente_cpf)) g.cpfs.push(l.paciente_cpf);
+    const temAux=!!l.medico_auxiliar_id, auxNome=l.medico_auxiliar_nome||'';
+    if(temAux && auxNome && !g.auxNomes.includes(auxNome)) g.auxNomes.push(auxNome);
+    (l.lancamento_itens||[]).forEach(it=>{ g.nItens++; g.procs.push(it.nome||'');
+      g.fat += Number(it.valor_faturamento||0) + (temAux?Number(it.aux_faturamento||0):0);
+      g.rep += Number(it.repasse||0);
+      g.repAux += temAux?Number(it.aux_repasse||0):0; });
+  });
+  return [...map.values()].sort((a,b)=>new Date(a.primeira)-new Date(b.primeira));
+}
 function montarRelatorio(){
   const tipo=$('tipoRel').value;
   if(tipo==='detalhe') return mDetalhe();
@@ -1242,19 +1272,19 @@ function montarRelatorio(){
   if(tipo==='financeiro') return mFinanceiro();
 }
 function mDetalhe(){
-  const cols=[{label:'Código'},{label:'Data'},{label:'Médico'},{label:'CRM'},{label:'Paciente'},{label:'Procedimento'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Médico auxiliar'},{label:'Repasse auxiliar',money:1}];
-  const rows=dadosRel().map(l=>{ const it=(l.lancamento_itens||[])[0]||{}; const temAux=!!l.medico_auxiliar_id;
-    return {'Código':l.codigo_interno||'','Data':fmtData(l.criado_em),'Médico':l.medicos?.nome||'','CRM':l.medicos?.crm||'','Paciente':l.paciente_nome,'Procedimento':it.nome||'','Faturamento':Number(it.valor_faturamento||0)+(temAux?Number(it.aux_faturamento||0):0),'Repasse':Number(it.repasse||0),'Médico auxiliar':l.medico_auxiliar_nome||'','Repasse auxiliar':temAux?Number(it.aux_repasse||0):0}; });
-  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true},widths:[{wch:12},{wch:18},{wch:26},{wch:10},{wch:24},{wch:40},{wch:14},{wch:14},{wch:26},{wch:16}]};
+  const cols=[{label:'Código'},{label:'Data'},{label:'Médico'},{label:'CRM'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'Nº proced.'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Médico auxiliar'},{label:'Repasse auxiliar',money:1}];
+  const grupos=agrupaCirurgias(dadosRel());
+  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Médico auxiliar':g.auxNomes.join(' + '),'Repasse auxiliar':+g.repAux.toFixed(2)}));
+  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:9},{wch:14},{wch:14},{wch:24},{wch:16}]};
 }
 function mFaturamento(){
-  const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'Procedimento'},{label:'Médico'},{label:'Faturamento',money:1}];
-  const rows=[]; let n=0,t=0;
-  dadosRel().forEach(l=>{ const it=(l.lancamento_itens||[])[0]||{}; n++;
-    const f=Number(it.valor_faturamento||0)+(l.medico_auxiliar_id?Number(it.aux_faturamento||0):0); t+=f;
-    rows.push({'Código':l.codigo_interno||'','Data':fmtData(l.criado_em),'Paciente':l.paciente_nome,'Procedimento':it.nome||'','Médico':l.medicos?.nome||'','Faturamento':f}); });
-  rows.push({'Código':'TOTAL','Data':'','Paciente':`${n} lançamento(s)`,'Procedimento':'','Médico':'','Faturamento':+t.toFixed(2)});
-  return {titulo:'Faturamento',base:'Faturamento',cols,rows,resumo:{fat:true,rep:false},widths:[{wch:12},{wch:18},{wch:26},{wch:40},{wch:24},{wch:14}]};
+  const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'Nº proced.'},{label:'Médico'},{label:'Faturamento',money:1}];
+  const grupos=agrupaCirurgias(dadosRel());
+  const rows=[]; let n=0,t=0,np=0;
+  grupos.forEach(g=>{ n++; t+=g.fat; np+=g.nItens;
+    rows.push({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'Nº proced.':g.nItens,'Médico':g.medicos.join(' + '),'Faturamento':+g.fat.toFixed(2)}); });
+  rows.push({'Código':'TOTAL','Data':'','Paciente':`${n} cirurgia(s)`,'CPF':'','Procedimento':'','Nº proced.':np,'Médico':'','Faturamento':+t.toFixed(2)});
+  return {titulo:'Faturamento',base:'Faturamento',cols,rows,resumo:{fat:true,rep:false,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:16},{wch:42},{wch:9},{wch:24},{wch:14}]};
 }
 function mProdMedica(){
   const colsDef=[{label:'Data'},{label:'Código'},{label:'Paciente'},{label:'Procedimento'},{label:'Repasse',money:1}];
@@ -1305,7 +1335,8 @@ function linhasResumo(spec){
   const R=calcResumo(), out=[];
   out.push({style:'head', cells:['RESUMO']});
   out.push({cells:['Nº de procedimentos', R.nProc], bold:true});
-  out.push({cells:['Nº de lançamentos', R.nCir], bold:true});
+  if(spec.cir) out.push({cells:[spec.cir.label||'Nº de cirurgias', spec.cir.count], bold:true});
+  else out.push({cells:['Nº de lançamentos', R.nCir], bold:true});
   if(spec.fat) out.push({cells:['Total de faturamento', +R.tFat.toFixed(2)], bold:true, money:[1]});
   if(spec.rep) out.push({cells:['Total de repasse', +R.tRep.toFixed(2)], bold:true, money:[1]});
   out.push({cells:['']});
@@ -1389,7 +1420,7 @@ function renderPreview(mod){
     html+=`<tr class="${isTot?'tot':''}">`+cols.map(c=>{ let v=r[c.label]; if(v==null)v=''; if(c.money&&typeof v==='number')v=brl(v); return `<td class="${c.money?'num':''}">${v}</td>`; }).join('')+'</tr>'; });
   html+='</tbody></table>';
   if(mod.resumo){ const R=calcResumo(), sp=mod.resumo;
-    html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#1f4d2a;color:#fff;font-weight:700;padding:8px 12px">RESUMO</div><div style="padding:10px 12px"><div>Nº de procedimentos: <b>${R.nProc}</b></div><div>Nº de lançamentos: <b>${R.nCir}</b></div>${sp.fat?`<div>Total de faturamento: <b>${brl(R.tFat)}</b></div>`:''}${sp.rep?`<div>Total de repasse: <b>${brl(R.tRep)}</b></div>`:''}</div></div>`;
+    html+=`<div style="margin-top:16px;border:1px solid var(--line);border-radius:10px;overflow:hidden"><div style="background:#1f4d2a;color:#fff;font-weight:700;padding:8px 12px">RESUMO</div><div style="padding:10px 12px"><div>Nº de procedimentos: <b>${R.nProc}</b></div>${sp.cir?`<div>${sp.cir.label||'Nº de cirurgias'}: <b>${sp.cir.count}</b></div>`:`<div>Nº de lançamentos: <b>${R.nCir}</b></div>`}${sp.fat?`<div>Total de faturamento: <b>${brl(R.tFat)}</b></div>`:''}${sp.rep?`<div>Total de repasse: <b>${brl(R.tRep)}</b></div>`:''}</div></div>`;
   }
   $('relPreview').innerHTML=html;
 }
