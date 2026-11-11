@@ -327,7 +327,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.11 · medvia-17';
+const APP_VERSION = '2026.11.11 · medvia-18';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 /* ---------- CPF ---------- */
@@ -672,15 +672,17 @@ async function carregarLista(){
   if(!data.length){ box.innerHTML='<div class="empty">Nenhum lançamento no período.</div>'; $('homeSub').textContent='—'; $('paginacao').innerHTML=''; return; }
   $('homeSub').textContent=(count||data.length)+' lançamento(s) no período.';
   box.innerHTML=data.map(l=>{
-    const it=(l.lancamento_itens||[])[0]||{};
+    const itens=(l.lancamento_itens||[]);
     const souAux=(l.medico_id!==perfil.id);
-    const val = souAux ? it.aux_repasse : it.repasse;
+    const val = itens.reduce((s,i)=>s+Number((souAux?i.aux_repasse:i.repasse)||0),0);
+    const nomes = itens.map(i=>i.nome||'—').join(' + ') || '—';
+    const nProc = itens.length>1 ? ` <span style="font-size:11px;color:var(--brand-d);font-weight:700">(${itens.length} proced.)</span>` : '';
     const edit = (!souAux && dentroDoPrazo(l.criado_em)) ? `<div class="acts"><a onclick="editarLancamento('${l.id}')">Editar</a></div>` : '';
     const tag = souAux ? ` <span style="font-size:11px;color:var(--brand-d);font-weight:700">· auxiliar${l.medicos?.nome?(' de '+l.medicos.nome):''}</span>` : '';
     return `<div class="lanc">
       <div class="head"><span class="codigo">${l.codigo_interno||'—'}${tag}</span><span class="when">${fmtData(l.criado_em)}</span></div>
       <div class="pac">${l.paciente_nome||'—'}</div>
-      <div class="item"><span class="nm">${it.nome||'—'}</span><span class="v">${brl(val)}</span></div>
+      <div class="item"><span class="nm">${nomes}${nProc}</span><span class="v">${brl(val)}</span></div>
       ${edit}</div>`;
   }).join('');
   const totPag=Math.max(1, Math.ceil((count||data.length)/PAG));
