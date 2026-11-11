@@ -404,7 +404,7 @@
     <div class="edgrid">
       <div class="edf"><label>Paciente</label><input id="elPac" type="text"></div>
       <div class="edf"><label>CPF do paciente</label><input id="elCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" oninput="mascaraCpf(this)"></div>
-      <div class="edf"><label>Data</label><input id="elData" type="date"></div>
+      <div class="edf"><label>Data da cirurgia</label><input id="elData" type="date"></div>
       <div class="edf full"><label>Médico principal</label><select id="elMedPrinc" onchange="onElMedPrincChange()"></select></div>
       <div class="edf full"><label>Procedimento</label><select id="elProc" onchange="onElProcChange()"></select></div>
       <div class="edf full hidden" id="elAuxWrap"><label id="elAuxLabel">Médico auxiliar</label><select id="elAux"></select></div>
@@ -447,7 +447,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.10 · medvia-18';
+const APP_VERSION='2026.11.11 · medvia-19';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -989,7 +989,7 @@ async function toggleProc(id,novo){ const v=(novo===true||novo==='true');
 /* ---------- LANÇAMENTOS ---------- */
 async function carregar(){
   const de=$('fDe').value, ate=$('fAte').value;
-  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(procedimento_id,nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
+  let q=sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,criado_em,foto_path,medico_id,medico_auxiliar_id,medico_auxiliar_nome,criado_por,criador:criado_por(nome),setor_id,setores:setor_id(nome,projeto_id),medicos!medico_id(nome,crm),lancamento_itens(procedimento_id,nome,valor_faturamento,repasse,aux_faturamento,aux_repasse),lancamento_fotos(id,path)').order('criado_em',{ascending:false}).limit(3000);
   if(de)  q=q.gte('criado_em', new Date(de+'T00:00:00').toISOString());
   if(ate) q=q.lte('criado_em', new Date(ate+'T23:59:59.999').toISOString());
   const {data,error}=await q;
@@ -1075,7 +1075,7 @@ async function baixarFotosPdf(id, btn){
 let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
-  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
+  const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
   if(error||!data) return alert('Erro ao abrir.');
   elLancId=id; elLancMedico=data.medico_id;
   // médicos habilitados em qualquer setor do MESMO PROJETO do lançamento
@@ -1090,7 +1090,7 @@ async function abrirEditarLanc(id){
   $('elLancadoPor').textContent = data.criador?.nome ? ('Lançado por: '+data.criador.nome) : '';
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||''; $('elCpf').value=data.paciente_cpf||'';
-  const d=new Date(data.criado_em); $('elData').value=isoLocal(d);
+  $('elData').value = data.data_cirurgia || isoLocal(new Date(data.criado_em));
   const itens=data.lancamento_itens||[]; const it=itens[0]||{}; elLancNItens=itens.length;
   const doSetor=procsCat.filter(p=>p.setor_id===data.setor_id && (p.ativo || p.id===it.procedimento_id));
   $('elProc').innerHTML=doSetor.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
@@ -1127,7 +1127,7 @@ async function salvarEditarLanc(){
   if(aux && aux===princ){ $('elErro').textContent='O auxiliar não pode ser o mesmo que o principal.'; $('elErro').classList.remove('hidden'); return; }
   const auxNome = aux ? (medById(aux)?.nome||null) : null;
   const b=$('elBtn'); b.disabled=true; b.textContent='Salvando…';
-  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf||null, criado_em:dataISO+'T12:00:00', medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
+  const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf||null, data_cirurgia:dataISO||null, medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
   if(e1){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro: '+e1.message; $('elErro').classList.remove('hidden'); return; }
   // só mexe nos itens quando há 1 só (evita apagar procedimentos de um lançamento múltiplo)
   if(elLancNItens<=1){
@@ -1227,15 +1227,16 @@ function renderHome(){
 function dadosRel(){
   const de=$('relDe').value, ate=$('relAte').value, med=$('relMed').value;
   const proj=$('relProj')?.value||'', set=$('relSetor')?.value||'';
+  const dc=l=>new Date(l.data_cirurgia ? (l.data_cirurgia+'T12:00:00') : l.criado_em);
   return todos.filter(l=>{
-    const d=new Date(l.criado_em);
+    const d=dc(l);
     if(de && d < new Date(de+'T00:00:00')) return false;
     if(ate && d > new Date(ate+'T23:59:59.999')) return false;
     if(med && l.medico_id!==med) return false;
     if(set && l.setor_id!==set) return false;
     if(proj && (l.setores?.projeto_id||'')!==proj) return false;
     return true;
-  }).slice().sort((a,b)=>new Date(a.criado_em)-new Date(b.criado_em));
+  }).slice().sort((a,b)=>dc(a)-dc(b));
 }
 function fmtPeriodo(){ const de=$('relDe').value, ate=$('relAte').value; return (de?fmtDataDia(de+'T12:00'):'início')+' a '+(ate?fmtDataDia(ate+'T12:00'):'hoje'); }
 function nomeArq(base){ const de=$('relDe').value||'', ate=$('relAte').value||''; return `MedVia_${base}_${de}_a_${ate}.xlsx`; }
@@ -1248,12 +1249,13 @@ function chavePaciente(l){ const cpf=soDigitos(l.paciente_cpf); if(cpf) return '
 function agrupaCirurgias(dados){
   const map=new Map();
   const sigMap={}; (procsCat||[]).forEach(p=>{ sigMap[p.id]=p.codigo_sigtap||''; });
-  (dados||[]).forEach(l=>{ const d=new Date(l.criado_em);
+  (dados||[]).forEach(l=>{ const base=l.data_cirurgia ? (l.data_cirurgia+'T12:00:00') : l.criado_em;
+    const d=new Date(base);
     const dia=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
     const key=dia+'|'+chavePaciente(l);
     let g=map.get(key);
-    if(!g){ g={primeira:l.criado_em,codigos:[],procs:[],sigtaps:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
-    if(new Date(l.criado_em)<new Date(g.primeira)) g.primeira=l.criado_em;
+    if(!g){ g={primeira:base,codigos:[],procs:[],sigtaps:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
+    if(new Date(base)<new Date(g.primeira)) g.primeira=base;
     if(l.codigo_interno && !g.codigos.includes(l.codigo_interno)) g.codigos.push(l.codigo_interno);
     const nm=l.medicos?.nome||''; if(nm && !g.medicos.includes(nm)){ g.medicos.push(nm); g.crms.push(l.medicos?.crm||''); }
     if(l.paciente_cpf && !g.cpfs.includes(l.paciente_cpf)) g.cpfs.push(l.paciente_cpf);
@@ -1294,7 +1296,7 @@ function mProdMedica(){
   const porMed={};
   participacoes(dadosRel()).forEach(p=>{ const k=p.medId||p.nome;
     porMed[k]=porMed[k]||{nome:p.nome,crm:p.crm,linhas:[],tRep:0};
-    porMed[k].linhas.push({'Data':fmtData(p.lanc.criado_em),'Código':p.lanc.codigo_interno||'','Paciente':p.lanc.paciente_nome,'Procedimento':(p.it.nome||'')+(p.isAux?' (auxiliar)':''),'Repasse':p.rep});
+    porMed[k].linhas.push({'Data':fmtDataDia(p.lanc.data_cirurgia?p.lanc.data_cirurgia+'T12:00:00':p.lanc.criado_em),'Código':p.lanc.codigo_interno||'','Paciente':p.lanc.paciente_nome,'Procedimento':(p.it.nome||'')+(p.isAux?' (auxiliar)':''),'Repasse':p.rep});
     porMed[k].tRep+=p.rep;
   });
   const blocos=Object.keys(porMed).sort((a,b)=>porMed[a].nome.localeCompare(porMed[b].nome)).map(k=>{ const g=porMed[k]; return {titulo:`${g.nome} — CRM ${g.crm||'—'}`, linhas:g.linhas, nProc:g.linhas.length, tRep:g.tRep}; });
