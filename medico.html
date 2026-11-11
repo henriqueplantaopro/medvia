@@ -323,7 +323,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.10 · medvia-15';
+const APP_VERSION = '2026.11.11 · medvia-16';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 /* ---------- CPF ---------- */
@@ -335,6 +335,42 @@ function cpfValido(cpf){ cpf=soDigitos(cpf);
   if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
   let s=0; for(let i=0;i<9;i++) s+=(+cpf[i])*(10-i); let d1=(s*10)%11; if(d1===10) d1=0; if(d1!==+cpf[9]) return false;
   s=0; for(let i=0;i<10;i++) s+=(+cpf[i])*(11-i); let d2=(s*10)%11; if(d2===10) d2=0; return d2===+cpf[10]; }
+
+/* ---------- alerta de duplicidade ---------- */
+function normNome(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(Boolean); }
+function alinhaTok(x,y){ if(x===y) return true; const m=Math.min(x.length,y.length); return m>=3 && x.slice(0,m)===y.slice(0,m); }
+function nomesSimilares(a,b){
+  const ta=normNome(a), tb=normNome(b);
+  if(!ta.length || !tb.length) return false;
+  if(!alinhaTok(ta[0],tb[0])) return false;           // primeiro nome precisa bater (igual ou abreviação)
+  if(ta.length===1 || tb.length===1) return true;      // só o primeiro nome foi informado
+  for(let i=1;i<ta.length;i++) for(let j=1;j<tb.length;j++) if(alinhaTok(ta[i],tb[j])) return true; // algum sobrenome em comum
+  return false;
+}
+async function checarDuplicidade(principalId, auxId, procIds, pac, cpf){
+  try{
+    const now=new Date();
+    const ini=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
+    const fim=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).toISOString();
+    const {data,error}=await sb.from('lancamentos')
+      .select('id,codigo_interno,paciente_nome,paciente_cpf,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome)')
+      .gte('criado_em',ini).lt('criado_em',fim);
+    if(error || !data) return null;
+    const parNovo=[principalId,auxId].filter(Boolean).sort().join(',');
+    const cpfNovo=soDigitos(cpf);
+    for(const l of data){
+      if(editId && l.id===editId) continue;
+      const parEx=[l.medico_id,l.medico_auxiliar_id].filter(Boolean).sort().join(',');
+      if(parEx!==parNovo) continue;                                  // mesmos 2 médicos?
+      const procComum=(l.lancamento_itens||[]).filter(x=>procIds.includes(x.procedimento_id));
+      if(!procComum.length) continue;                                // mesmo procedimento?
+      const mesmoCpf = cpfNovo && l.paciente_cpf && soDigitos(l.paciente_cpf)===cpfNovo;
+      if(mesmoCpf || nomesSimilares(pac, l.paciente_nome))           // paciente parecido?
+        return {paciente:l.paciente_nome||'', proc:procComum[0].nome||'', codigo:l.codigo_interno||''};
+    }
+    return null;
+  }catch(_){ return null; }   // nunca travar o lançamento por falha na checagem
+}
 
 let perfil = null;
 let procs = [];            // catálogo acessível (id, nome, repasse, setor_id, aux_regra, aux_repasse…)
@@ -784,6 +820,17 @@ async function salvar(){
     auxId=outro||null; auxNome=outro?(auxDocs.find(a=>a.id===outro)?.nome||null):null;
   }
   if((fotosNovas.length + fotosExistentes.length)===0) return showErr('novoErr','Anexe pelo menos uma foto da ficha.');
+  // alerta de possível duplicidade (só em lançamento novo)
+  if(!editId){
+    const dup=await checarDuplicidade(principalId, auxId, procsSelec.map(p=>p.id), pac, cpf);
+    if(dup){
+      const ok=confirm('⚠️ Possível lançamento em duplicidade.\n\n'+
+        'Já existe um lançamento de hoje com os mesmos médicos, o procedimento "'+dup.proc+'" '+
+        'e um paciente parecido ("'+dup.paciente+'"'+(dup.codigo?(' · '+dup.codigo):'')+').\n\n'+
+        'Deseja lançar mesmo assim?');
+      if(!ok) return;
+    }
+  }
   $('btnSalvar').disabled=true; $('btnSalvar').textContent='Salvando…';
   try{
     let lancId=editId;
