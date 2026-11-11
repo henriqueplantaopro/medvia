@@ -330,6 +330,7 @@
         <div class="subtabs">
           <button id="cvGest" onclick="setCadView('gestores')">Gestores e operadores</button>
           <button id="cvMed" class="on" onclick="setCadView('medicos')">Médicos</button>
+          <button id="cvGrade" onclick="setCadView('grade')">Médicos × Projetos</button>
         </div>
         <input id="cadBusca" type="text" placeholder="Buscar por nome ou CRM…" oninput="buscarCad(this.value)" style="margin-bottom:14px">
         <div id="listaMedicos"></div>
@@ -447,7 +448,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.11 · medvia-19';
+const APP_VERSION='2026.11.11 · medvia-20';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -787,11 +788,61 @@ function splitCRM(crm){ const s=String(crm||'').trim(); const m=s.match(/^([A-Za
 function juntarCRM(uf,num){ num=String(num||'').trim(); uf=String(uf||'').trim().toUpperCase(); return uf?(uf+'-'+num):num; }
 
 /* ---------- CADASTROS ---------- */
-function setCadView(v){ cadView=v; cadPagina=0; $('cvGest').classList.toggle('on',v==='gestores'); $('cvMed').classList.toggle('on',v==='medicos'); renderCadastros(); }
-function buscarCad(t){ cadBusca=(t||'').trim().toLowerCase(); cadPagina=0; renderCadastros(); }
+function setCadView(v){ cadView=v; cadPagina=0;
+  $('cvGest').classList.toggle('on',v==='gestores');
+  $('cvMed').classList.toggle('on',v==='medicos');
+  $('cvGrade').classList.toggle('on',v==='grade');
+  if(v==='grade') renderGrade(); else renderCadastros();
+}
+function buscarCad(t){ cadBusca=(t||'').trim().toLowerCase(); cadPagina=0; if(cadView==='grade') renderGrade(); else renderCadastros(); }
 async function carregarListaMedicos(){
   const {data}=await sb.from('medicos').select('*').order('nome');
-  cadDados=data||[]; renderCadastros();
+  cadDados=data||[]; if(cadView==='grade') renderGrade(); else renderCadastros();
+}
+/* ---------- grade Médicos × Setores (agrupados por projeto) ---------- */
+let gradeMap={};
+async function renderGrade(){
+  const box=$('listaMedicos'); $('cadPag').innerHTML='';
+  box.innerHTML='<div class="sub" style="margin:0">Carregando grade…</div>';
+  const {data:links,error}=await sb.from('medico_setores').select('medico_id,setor_id');
+  if(error){ box.innerHTML='<div class="empty">Erro ao carregar vínculos.</div>'; return; }
+  gradeMap={}; (links||[]).forEach(l=>{ (gradeMap[l.medico_id]||(gradeMap[l.medico_id]=new Set())).add(l.setor_id); });
+  const linkedSet=new Set((links||[]).map(l=>l.setor_id));
+  let meds=cadDados.filter(m=>m.papel==='medico');
+  if(cadBusca) meds=meds.filter(m=>(m.nome||'').toLowerCase().includes(cadBusca)||(m.crm||'').toLowerCase().includes(cadBusca));
+  meds.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const projCols=projetos
+    .filter(p=> p.ativo || setores.some(s=>s.projeto_id===p.id && linkedSet.has(s.id)))
+    .map(p=>({proj:p, sets:setores.filter(s=>s.projeto_id===p.id && (s.ativo || linkedSet.has(s.id)))}))
+    .filter(c=>c.sets.length);
+  if(!projCols.length){ box.innerHTML='<div class="empty">Nenhum projeto/setor cadastrado (aba Projetos).</div>'; return; }
+  if(!meds.length){ box.innerHTML='<div class="empty">Nenhum médico.</div>'; return; }
+  const L='1px solid #e5e7eb', LP='2px solid #cbd5e1';
+  let h='<p class="sub" style="margin:0 0 10px">Marque para vincular o médico ao setor. Cada clique salva na hora.</p>';
+  h+='<div style="overflow:auto;max-height:70vh;border:'+L+';border-radius:10px"><table style="border-collapse:collapse;font-size:12px">';
+  h+='<thead><tr><th rowspan="2" style="position:sticky;left:0;top:0;background:#fff;z-index:4;text-align:left;padding:8px 10px;border-right:'+LP+';border-bottom:'+L+'">Médico</th>';
+  projCols.forEach(c=>{ h+=`<th colspan="${c.sets.length}" style="position:sticky;top:0;background:#fff;z-index:3;padding:6px 8px;text-align:center;border-bottom:${L};border-left:${LP};color:var(--brand-d);font-weight:700;white-space:nowrap">${c.proj.nome}</th>`; });
+  h+='</tr><tr>';
+  projCols.forEach(c=>{ c.sets.forEach((s,i)=>{ h+=`<th style="position:sticky;top:30px;background:#fff;z-index:3;padding:6px 8px;text-align:center;border-bottom:${LP};${i===0?'border-left:'+LP+';':''}white-space:nowrap;font-weight:600">${s.nome}${s.ativo?'':' (inativo)'}</th>`; }); });
+  h+='</tr></thead><tbody>';
+  meds.forEach(m=>{
+    const g=gradeMap[m.id];
+    h+=`<tr><td style="position:sticky;left:0;background:#fff;z-index:1;padding:6px 10px;border-right:${LP};border-bottom:1px solid #f1f5f9;white-space:nowrap;font-weight:600">${m.nome}${m.ativo===false?' 🔒':''}</td>`;
+    projCols.forEach(c=>{ c.sets.forEach((s,i)=>{ const on=g&&g.has(s.id);
+      h+=`<td style="text-align:center;padding:4px 8px;border-bottom:1px solid #f1f5f9;${i===0?'border-left:'+LP+';':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleGradeSetor('${m.id}','${s.id}',this.checked,this)" style="width:auto;cursor:pointer"></td>`; }); });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  box.innerHTML=h;
+}
+async function toggleGradeSetor(medId, setId, checked, el){
+  const set = gradeMap[medId] || (gradeMap[medId]=new Set());
+  const prev = new Set(set);
+  if(checked) set.add(setId); else set.delete(setId);
+  el.disabled=true;
+  const {error}=await sb.rpc('set_medico_setores',{p_medico:medId, p_setores:[...set]});
+  el.disabled=false;
+  if(error){ gradeMap[medId]=prev; el.checked=!checked; alert('Erro ao salvar: '+error.message); }
 }
 function renderCadastros(){
   const box=$('listaMedicos');
@@ -1249,18 +1300,19 @@ function chavePaciente(l){ const cpf=soDigitos(l.paciente_cpf); if(cpf) return '
 function agrupaCirurgias(dados){
   const map=new Map();
   const sigMap={}; (procsCat||[]).forEach(p=>{ sigMap[p.id]=p.codigo_sigtap||''; });
+  const crmMap={}; (medicos||[]).forEach(m=>{ crmMap[m.id]=m.crm||''; });
   (dados||[]).forEach(l=>{ const base=l.data_cirurgia ? (l.data_cirurgia+'T12:00:00') : l.criado_em;
     const d=new Date(base);
     const dia=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
     const key=dia+'|'+chavePaciente(l);
     let g=map.get(key);
-    if(!g){ g={primeira:base,codigos:[],procs:[],sigtaps:[],medicos:[],crms:[],auxNomes:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
+    if(!g){ g={primeira:base,codigos:[],procs:[],sigtaps:[],medicos:[],crms:[],auxNomes:[],auxCrms:[],cpfs:[],nItens:0,fat:0,rep:0,repAux:0,paciente:l.paciente_nome||''}; map.set(key,g); }
     if(new Date(base)<new Date(g.primeira)) g.primeira=base;
     if(l.codigo_interno && !g.codigos.includes(l.codigo_interno)) g.codigos.push(l.codigo_interno);
     const nm=l.medicos?.nome||''; if(nm && !g.medicos.includes(nm)){ g.medicos.push(nm); g.crms.push(l.medicos?.crm||''); }
     if(l.paciente_cpf && !g.cpfs.includes(l.paciente_cpf)) g.cpfs.push(l.paciente_cpf);
     const temAux=!!l.medico_auxiliar_id, auxNome=l.medico_auxiliar_nome||'';
-    if(temAux && auxNome && !g.auxNomes.includes(auxNome)) g.auxNomes.push(auxNome);
+    if(temAux && auxNome && !g.auxNomes.includes(auxNome)){ g.auxNomes.push(auxNome); g.auxCrms.push(crmMap[l.medico_auxiliar_id]||''); }
     (l.lancamento_itens||[]).forEach(it=>{ g.nItens++; g.procs.push(it.nome||'');
       const sg=sigMap[it.procedimento_id]; if(sg && !g.sigtaps.includes(sg)) g.sigtaps.push(sg);
       g.fat += Number(it.valor_faturamento||0) + (temAux?Number(it.aux_faturamento||0):0);
@@ -1277,10 +1329,10 @@ function montarRelatorio(){
   if(tipo==='financeiro') return mFinanceiro();
 }
 function mDetalhe(){
-  const cols=[{label:'Código'},{label:'Data'},{label:'Médico'},{label:'CRM'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Médico auxiliar'},{label:'Repasse auxiliar',money:1}];
+  const cols=[{label:'Código'},{label:'Data'},{label:'Médico principal'},{label:'CRM'},{label:'Médico auxiliar'},{label:'CRM (aux.)'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Faturamento',money:1},{label:'Repasse',money:1},{label:'Repasse auxiliar',money:1}];
   const grupos=agrupaCirurgias(dadosRel());
-  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Médico auxiliar':g.auxNomes.join(' + '),'Repasse auxiliar':+g.repAux.toFixed(2)}));
-  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:20},{wch:9},{wch:14},{wch:14},{wch:24},{wch:16}]};
+  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico principal':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Médico auxiliar':g.auxNomes.join(' + '),'CRM (aux.)':g.auxCrms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Repasse auxiliar':+g.repAux.toFixed(2)}));
+  return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:20},{wch:9},{wch:14},{wch:14},{wch:16}]};
 }
 function mFaturamento(){
   const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Médico'},{label:'Faturamento',money:1}];
