@@ -214,6 +214,10 @@
           <label>CPF do paciente</label>
           <input id="pacienteCpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="mascaraCpf(this)">
         </div>
+        <div class="field">
+          <label>Data da cirurgia</label>
+          <input id="dataCirurgia" type="date">
+        </div>
         <div class="field" id="setorWrap">
           <label>Setor</label>
           <select id="selSetor" onchange="onSetorChange()"><option value="">Selecione o setor…</option></select>
@@ -323,7 +327,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.11 · medvia-16';
+const APP_VERSION = '2026.11.11 · medvia-17';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 /* ---------- CPF ---------- */
@@ -336,6 +340,10 @@ function cpfValido(cpf){ cpf=soDigitos(cpf);
   let s=0; for(let i=0;i<9;i++) s+=(+cpf[i])*(10-i); let d1=(s*10)%11; if(d1===10) d1=0; if(d1!==+cpf[9]) return false;
   s=0; for(let i=0;i<10;i++) s+=(+cpf[i])*(11-i); let d2=(s*10)%11; if(d2===10) d2=0; return d2===+cpf[10]; }
 
+/* ---------- datas ---------- */
+function hojeISO(){ const h=new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-${String(h.getDate()).padStart(2,'0')}`; }
+function isoDiaLocal(iso){ if(!iso) return ''; const d=new Date(iso); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
 /* ---------- alerta de duplicidade ---------- */
 function normNome(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(Boolean); }
 function alinhaTok(x,y){ if(x===y) return true; const m=Math.min(x.length,y.length); return m>=3 && x.slice(0,m)===y.slice(0,m); }
@@ -347,14 +355,11 @@ function nomesSimilares(a,b){
   for(let i=1;i<ta.length;i++) for(let j=1;j<tb.length;j++) if(alinhaTok(ta[i],tb[j])) return true; // algum sobrenome em comum
   return false;
 }
-async function checarDuplicidade(principalId, auxId, procIds, pac, cpf){
+async function checarDuplicidade(principalId, auxId, procIds, pac, cpf, dataCir){
   try{
-    const now=new Date();
-    const ini=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
-    const fim=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).toISOString();
     const {data,error}=await sb.from('lancamentos')
       .select('id,codigo_interno,paciente_nome,paciente_cpf,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome)')
-      .gte('criado_em',ini).lt('criado_em',fim);
+      .eq('data_cirurgia', dataCir);
     if(error || !data) return null;
     const parNovo=[principalId,auxId].filter(Boolean).sort().join(',');
     const cpfNovo=soDigitos(cpf);
@@ -709,7 +714,7 @@ function novoLancamento(){
   if(!setoresMed.length){ toast('Nenhum setor habilitado para você. Solicite ao gestor.'); return; }
   restaurarFormulario();
   editId=null;
-  $('paciente').value=''; $('pacienteCpf').value=''; $('obs').value='';
+  $('paciente').value=''; $('pacienteCpf').value=''; $('dataCirurgia').value=hojeISO(); $('obs').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
   $('selSetor').disabled = (setoresMed.length===1);
   onSetorChange();
@@ -722,13 +727,13 @@ function novoLancamento(){
 }
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,paciente_cpf,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
+    .select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 24 horas encerrado. Solicite ao gestor.'); carregarLista(); return; }
   restaurarFormulario();
   editId=id;
-  $('paciente').value=data.paciente_nome||''; $('pacienteCpf').value=data.paciente_cpf||''; $('obs').value=data.observacao||'';
+  $('paciente').value=data.paciente_nome||''; $('pacienteCpf').value=data.paciente_cpf||''; $('dataCirurgia').value=data.data_cirurgia||isoDiaLocal(data.criado_em); $('obs').value=data.observacao||'';
   if($('selSetor')){ $('selSetor').value=data.setor_id||''; $('selSetor').disabled=true; }
   await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
   procsSelec=(data.lancamento_itens||[]).map(it=>({id:it.procedimento_id, nome:it.nome||(procs.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
@@ -803,10 +808,12 @@ async function salvar(){
 
   const pac=$('paciente').value.trim(), obs=$('obs').value.trim();
   const cpf=$('pacienteCpf').value.trim();
+  const dataCir=$('dataCirurgia').value;
   const setor=$('selSetor') ? $('selSetor').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
   if(!soDigitos(cpf)) return showErr('novoErr','Informe o CPF do paciente.');
   if(!cpfValido(cpf)) return showErr('novoErr','CPF do paciente inválido. Confira os números.');
+  if(!dataCir) return showErr('novoErr','Informe a data da cirurgia.');
   if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
   const regra = regraDaLista();
   const outro = (regra==='bloqueado') ? '' : ($('selAux') ? $('selAux').value : '');
@@ -822,7 +829,7 @@ async function salvar(){
   if((fotosNovas.length + fotosExistentes.length)===0) return showErr('novoErr','Anexe pelo menos uma foto da ficha.');
   // alerta de possível duplicidade (só em lançamento novo)
   if(!editId){
-    const dup=await checarDuplicidade(principalId, auxId, procsSelec.map(p=>p.id), pac, cpf);
+    const dup=await checarDuplicidade(principalId, auxId, procsSelec.map(p=>p.id), pac, cpf, dataCir);
     if(dup){
       const ok=confirm('⚠️ Possível lançamento em duplicidade.\n\n'+
         'Já existe um lançamento de hoje com os mesmos médicos, o procedimento "'+dup.proc+'" '+
@@ -835,12 +842,12 @@ async function salvar(){
   try{
     let lancId=editId;
     if(editId){
-      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
+      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
       if(e1) throw e1;
       const {error:e2}=await sb.from('lancamento_itens').delete().eq('lancamento_id',editId);
       if(e2) throw e2;
     } else {
-      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, paciente_cpf:cpf, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
+      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
         .select('id,codigo_interno').single();
       if(e0) throw e0;
       lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
