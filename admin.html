@@ -249,6 +249,7 @@
           <div><label>Tipo</label>
             <select id="tipoRel">
               <option value="detalhe">Detalhado — todos os lançamentos</option>
+              <option value="procrealizados">Relatório de procedimentos realizados</option>
               <option value="faturamento">Faturamento</option>
               <option value="prodmedica">Produtividade médica</option>
               <option value="financeiro">Financeiro consolidado</option>
@@ -407,7 +408,13 @@
       <div class="edf"><label>CPF do paciente</label><input id="elCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" oninput="mascaraCpf(this)"></div>
       <div class="edf"><label>Data da cirurgia</label><input id="elData" type="date"></div>
       <div class="edf full"><label>Médico principal</label><select id="elMedPrinc" onchange="onElMedPrincChange()"></select></div>
-      <div class="edf full"><label>Procedimento</label><select id="elProc" onchange="onElProcChange()"></select></div>
+      <div class="edf full"><label>Procedimentos</label>
+        <div style="display:flex;gap:8px">
+          <select id="elProcAdd" style="flex:1"><option value="">Selecione o procedimento…</option></select>
+          <button type="button" onclick="elAddProc()" style="flex:none;white-space:nowrap;padding:8px 14px;border:0;border-radius:8px;background:var(--brand-d,#157a52);color:#fff;font-weight:600;cursor:pointer">+ Adicionar</button>
+        </div>
+        <div id="elProcLista" style="margin-top:8px"></div>
+      </div>
       <div class="edf full hidden" id="elAuxWrap"><label id="elAuxLabel">Médico auxiliar</label><select id="elAux"></select></div>
     </div>
     <div id="elErro" class="err hidden"></div>
@@ -448,7 +455,7 @@
 <script>
 if(typeof SUPABASE_URL==='undefined' || !SUPABASE_URL || !SUPABASE_ANON){ alert('config.js ausente ou incompleto.'); }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION='2026.11.11 · medvia-20';
+const APP_VERSION='2026.11.12 · medvia-22';
 try{ document.getElementById('verStamp').textContent='v'+APP_VERSION; }catch(_){}
 
 const $ = id => document.getElementById(id);
@@ -1123,7 +1130,7 @@ async function baixarFotosPdf(id, btn){
 }
 
 /* editar lançamento (gestor/operador) */
-let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1;
+let elLancId=null, elLancMedico=null, elSetorMedicos=[], elLancNItens=1, elLancSetor=null, elProcs=[];
 async function abrirEditarLanc(id){
   $('elErro').classList.add('hidden');
   const {data,error}=await sb.from('lancamentos').select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,criado_em,setor_id,medico_id,medico_auxiliar_id,lancamento_itens(procedimento_id)').eq('id',id).single();
@@ -1142,50 +1149,64 @@ async function abrirEditarLanc(id){
   $('elTitulo').textContent='Editar lançamento '+(data.codigo_interno||'')+' · '+nomeSetor(data.setor_id);
   $('elPac').value=data.paciente_nome||''; $('elCpf').value=data.paciente_cpf||'';
   $('elData').value = data.data_cirurgia || isoLocal(new Date(data.criado_em));
-  const itens=data.lancamento_itens||[]; const it=itens[0]||{}; elLancNItens=itens.length;
-  const doSetor=procsCat.filter(p=>p.setor_id===data.setor_id && (p.ativo || p.id===it.procedimento_id));
-  $('elProc').innerHTML=doSetor.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-  if(it.procedimento_id) $('elProc').value=it.procedimento_id;
-  // lançamento com vários procedimentos: não permite trocar os itens por aqui (evita apagar os demais)
-  const multi = elLancNItens>1;
-  $('elProc').disabled = multi;
-  if(multi) $('elTitulo').textContent += ' · '+elLancNItens+' procedimentos';
-  onElProcChange();
-  if(data.medico_auxiliar_id) $('elAux').value=data.medico_auxiliar_id;
+  elLancSetor=data.setor_id;
+  const itens=data.lancamento_itens||[]; elLancNItens=itens.length;
+  elProcs=itens.map(it=>({id:it.procedimento_id, nome:(procsCat.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
+  elRenderProcAdd(); elRenderProcLista();
+  if(data.medico_auxiliar_id && [...$('elAux').options].some(o=>o.value===data.medico_auxiliar_id)) $('elAux').value=data.medico_auxiliar_id;
   $('editLancM').classList.remove('hidden');
 }
-function onElMedPrincChange(){ elLancMedico=$('elMedPrinc').value; onElProcChange(); }
-function onElProcChange(){
-  const p=procsCat.find(x=>x.id===$('elProc').value);
-  const wrap=$('elAuxWrap'), sel=$('elAux');
-  if(!p || (p.aux_regra||'bloqueado')==='bloqueado'){ wrap.classList.add('hidden'); sel.innerHTML=''; return; }
-  const lista=medicos.filter(m=>m.papel==='medico' && m.ativo!==false && m.id!==elLancMedico && elSetorMedicos.includes(m.id));
-  sel.innerHTML=(p.aux_regra==='opcional'?'<option value="">— sem auxiliar —</option>':'<option value="">Selecione o auxiliar…</option>')
+function onElMedPrincChange(){ elLancMedico=$('elMedPrinc').value; elAtualizarAux(); }
+function elRegraAux(){ let r='bloqueado';
+  elProcs.forEach(x=>{ const p=procsCat.find(y=>y.id===x.id); const g=p?(p.aux_regra||'bloqueado'):'bloqueado';
+    if(g==='obrigatorio') r='obrigatorio'; else if(g==='opcional' && r!=='obrigatorio') r='opcional'; });
+  return r; }
+function elRenderProcAdd(){
+  const arr=procsCat.filter(p=>p.setor_id===elLancSetor && (p.ativo || elProcs.some(x=>x.id===p.id)));
+  $('elProcAdd').innerHTML='<option value="">Selecione o procedimento…</option>'+arr.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+}
+function elAddProc(){ const id=$('elProcAdd').value; if(!id) return;
+  const p=procsCat.find(x=>x.id===id); if(!p) return;
+  elProcs.push({id:p.id, nome:p.nome}); $('elProcAdd').value=''; elRenderProcLista(); }
+function elRemoveProc(i){ elProcs.splice(i,1); elRenderProcLista(); }
+function elRenderProcLista(){
+  const box=$('elProcLista');
+  box.innerHTML = elProcs.length
+    ? elProcs.map((p,i)=>`<span style="display:inline-flex;align-items:center;gap:6px;background:#eef2f1;border-radius:8px;padding:4px 10px;margin:0 6px 6px 0;font-size:13px">${i+1}. ${p.nome} <a onclick="elRemoveProc(${i})" style="cursor:pointer;color:#c0392b;font-weight:700" title="Remover">✕</a></span>`).join('')
+    : '<div class="sub" style="margin:0">Nenhum procedimento. Adicione ao menos um.</div>';
+  elAtualizarAux();
+}
+function elAtualizarAux(){
+  const regra=elRegraAux();
+  const wrap=$('elAuxWrap'), sel=$('elAux'), prev=sel.value;
+  if(regra==='bloqueado'){ wrap.classList.add('hidden'); sel.innerHTML=''; return; }
+  const lista=medicos.filter(m=>m.papel==='medico' && m.ativo!==false && m.id!==$('elMedPrinc').value && elSetorMedicos.includes(m.id));
+  sel.innerHTML=(regra==='opcional'?'<option value="">— sem auxiliar —</option>':'<option value="">Selecione o auxiliar…</option>')
     +lista.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
-  $('elAuxLabel').textContent = p.aux_regra==='obrigatorio'?'Médico auxiliar (obrigatório)':'Médico auxiliar (opcional)';
+  if([...sel.options].some(o=>o.value===prev)) sel.value=prev;
+  $('elAuxLabel').textContent = regra==='obrigatorio'?'Médico auxiliar (obrigatório)':'Médico auxiliar (opcional)';
   wrap.classList.remove('hidden');
 }
 async function salvarEditarLanc(){
   $('elErro').classList.add('hidden');
-  const pac=$('elPac').value.trim(), proc=$('elProc').value, dataISO=$('elData').value;
+  const pac=$('elPac').value.trim(), dataISO=$('elData').value;
   const cpf=$('elCpf').value.trim();
   const princ=$('elMedPrinc').value;
-  if(!pac||!proc||!dataISO){ $('elErro').textContent='Preencha paciente, procedimento e data.'; $('elErro').classList.remove('hidden'); return; }
+  if(!pac||!elProcs.length||!dataISO){ $('elErro').textContent='Preencha paciente, ao menos um procedimento e a data.'; $('elErro').classList.remove('hidden'); return; }
   if(!princ){ $('elErro').textContent='Selecione o médico principal.'; $('elErro').classList.remove('hidden'); return; }
-  const p=procsCat.find(x=>x.id===proc)||{}; const regra=p.aux_regra||'bloqueado';
+  const regra=elRegraAux();
   const aux = (regra==='bloqueado') ? '' : $('elAux').value;
-  if(regra==='obrigatorio' && !aux){ $('elErro').textContent='Este procedimento exige médico auxiliar.'; $('elErro').classList.remove('hidden'); return; }
+  if(regra==='obrigatorio' && !aux){ $('elErro').textContent='Algum procedimento exige médico auxiliar.'; $('elErro').classList.remove('hidden'); return; }
   if(aux && aux===princ){ $('elErro').textContent='O auxiliar não pode ser o mesmo que o principal.'; $('elErro').classList.remove('hidden'); return; }
   const auxNome = aux ? (medById(aux)?.nome||null) : null;
   const b=$('elBtn'); b.disabled=true; b.textContent='Salvando…';
   const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf||null, data_cirurgia:dataISO||null, medico_id:princ, medico_auxiliar_id:aux||null, medico_auxiliar_nome:auxNome}).eq('id',elLancId);
   if(e1){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro: '+e1.message; $('elErro').classList.remove('hidden'); return; }
-  // só mexe nos itens quando há 1 só (evita apagar procedimentos de um lançamento múltiplo)
-  if(elLancNItens<=1){
-    await sb.from('lancamento_itens').delete().eq('lancamento_id',elLancId);
-    const {error:e3}=await sb.from('lancamento_itens').insert({lancamento_id:elLancId, procedimento_id:proc});
-    if(e3){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro ao salvar item: '+e3.message; $('elErro').classList.remove('hidden'); return; }
-  }
+  // reescreve TODOS os itens (agora o editor suporta vários procedimentos)
+  const {error:eDel}=await sb.from('lancamento_itens').delete().eq('lancamento_id',elLancId);
+  if(eDel){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro ao atualizar procedimentos: '+eDel.message; $('elErro').classList.remove('hidden'); return; }
+  const {error:e3}=await sb.from('lancamento_itens').insert(elProcs.map(p=>({lancamento_id:elLancId, procedimento_id:p.id})));
+  if(e3){ b.disabled=false; b.textContent='Salvar alterações'; $('elErro').textContent='Erro ao salvar procedimentos: '+e3.message; $('elErro').classList.remove('hidden'); return; }
   b.disabled=false; b.textContent='Salvar alterações';
   $('editLancM').classList.add('hidden'); await carregar();
 }
@@ -1324,6 +1345,7 @@ function agrupaCirurgias(dados){
 function montarRelatorio(){
   const tipo=$('tipoRel').value;
   if(tipo==='detalhe') return mDetalhe();
+  if(tipo==='procrealizados') return mProcRealizados();
   if(tipo==='faturamento') return mFaturamento();
   if(tipo==='prodmedica') return mProdMedica();
   if(tipo==='financeiro') return mFinanceiro();
@@ -1333,6 +1355,12 @@ function mDetalhe(){
   const grupos=agrupaCirurgias(dadosRel());
   const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Data':fmtDataDia(g.primeira),'Médico principal':g.medicos.join(' + '),'CRM':g.crms.filter(Boolean).join(' + '),'Médico auxiliar':g.auxNomes.join(' + '),'CRM (aux.)':g.auxCrms.filter(Boolean).join(' + '),'Paciente':g.paciente,'CPF':g.cpfs.join(' + '),'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens,'Faturamento':+g.fat.toFixed(2),'Repasse':+g.rep.toFixed(2),'Repasse auxiliar':+g.repAux.toFixed(2)}));
   return {titulo:'Detalhado',base:'Detalhado',cols,rows,resumo:{fat:true,rep:true,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:16},{wch:12},{wch:24},{wch:12},{wch:24},{wch:12},{wch:24},{wch:16},{wch:42},{wch:20},{wch:9},{wch:14},{wch:14},{wch:16}]};
+}
+function mProcRealizados(){
+  const cols=[{label:'Código'},{label:'Médico principal'},{label:'Médico auxiliar'},{label:'Paciente'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'}];
+  const grupos=agrupaCirurgias(dadosRel());
+  const rows=grupos.map(g=>({'Código':g.codigos.join(' + '),'Médico principal':g.medicos.join(' + '),'Médico auxiliar':g.auxNomes.join(' + '),'Paciente':g.paciente,'Procedimento':g.procs.join(' + '),'SIGTAP':g.sigtaps.join(' + '),'Nº proced.':g.nItens}));
+  return {titulo:'Relatório de procedimentos realizados',base:'Procedimentos_realizados',cols,rows,resumo:{fat:false,rep:false,cir:{count:grupos.length,label:'Nº de cirurgias'}},widths:[{wch:18},{wch:24},{wch:24},{wch:26},{wch:44},{wch:22},{wch:9}]};
 }
 function mFaturamento(){
   const cols=[{label:'Código'},{label:'Data'},{label:'Paciente'},{label:'CPF'},{label:'Procedimento'},{label:'SIGTAP'},{label:'Nº proced.'},{label:'Médico'},{label:'Faturamento',money:1}];
