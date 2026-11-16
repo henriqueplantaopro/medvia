@@ -211,7 +211,7 @@
           <input id="paciente" type="text" autocomplete="off">
         </div>
         <div class="field">
-          <label>CPF do paciente</label>
+          <label>CPF do paciente (opcional)</label>
           <input id="pacienteCpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="mascaraCpf(this)">
         </div>
         <div class="field">
@@ -327,7 +327,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.11 · medvia-18';
+const APP_VERSION = '2026.11.16 · medvia-19';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 /* ---------- CPF ---------- */
@@ -813,8 +813,7 @@ async function salvar(){
   const dataCir=$('dataCirurgia').value;
   const setor=$('selSetor') ? $('selSetor').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
-  if(!soDigitos(cpf)) return showErr('novoErr','Informe o CPF do paciente.');
-  if(!cpfValido(cpf)) return showErr('novoErr','CPF do paciente inválido. Confira os números.');
+  if(soDigitos(cpf) && !cpfValido(cpf)) return showErr('novoErr','CPF do paciente inválido. Confira os números.');
   if(!dataCir) return showErr('novoErr','Informe a data da cirurgia.');
   if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
   const regra = regraDaLista();
