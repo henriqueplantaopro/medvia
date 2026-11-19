@@ -222,6 +222,14 @@
           <label>Setor</label>
           <select id="selSetor" onchange="onSetorChange()"><option value="">Selecione o setor…</option></select>
         </div>
+        <div class="field hidden" id="unidadeWrap">
+          <label>Unidade</label>
+          <select id="selUnidade">
+            <option value="">Selecione a unidade…</option>
+            <option value="Botafogo">Botafogo</option>
+            <option value="Copacabana">Copacabana</option>
+          </select>
+        </div>
         <div class="field">
           <label>Procedimentos realizados</label>
           <div style="display:flex;gap:8px">
@@ -327,7 +335,7 @@ if(typeof SUPABASE_URL==='undefined' || typeof SUPABASE_ANON==='undefined' || !S
   alert('config.js não encontrado ou incompleto. Verifique SUPABASE_URL e SUPABASE_ANON na raiz.');
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-const APP_VERSION = '2026.11.16 · medvia-19';
+const APP_VERSION = '2026.11.19 · medvia-20';
 try{ const _vs=document.getElementById('verStamp'); if(_vs) _vs.textContent='v'+APP_VERSION; }catch(_){}
 
 /* ---------- CPF ---------- */
@@ -548,8 +556,17 @@ async function carregarAuxiliares(setorId){
   const {data,error}=await sb.rpc('auxiliares_do_setor',{p_setor:setorId});
   auxDocs = error ? [] : (data||[]).filter(m=>m.id!==perfil.id);
 }
+function projetoDoSetor(sid){ const s=setoresMed.find(x=>x.id===sid); return s?s.projeto:''; }
+function ehDrConsulta(sid){ return String(projetoDoSetor(sid)||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\./g,' ').replace(/\s+/g,' ').includes('dr consulta'); }
+function atualizarUnidade(){
+  const sid=$('selSetor') ? $('selSetor').value : '';
+  const mostra=ehDrConsulta(sid);
+  $('unidadeWrap').classList.toggle('hidden', !mostra);
+  if(!mostra && $('selUnidade')) $('selUnidade').value='';
+}
 async function onSetorChange(){
   procsSelec=[];
+  atualizarUnidade();
   await carregarAuxiliares($('selSetor') ? $('selSetor').value : '');
   filtrarProcPorSetor();
 }
@@ -569,6 +586,7 @@ async function carregarProcedimentos(){
     if(setoresMed.length===1){ selS.value=setoresMed[0].id; selS.disabled=true; }
     else { selS.disabled=false; }
   }
+  atualizarUnidade();
   await carregarAuxiliares(selS ? selS.value : '');
   filtrarProcPorSetor();
 }
@@ -717,6 +735,7 @@ function novoLancamento(){
   restaurarFormulario();
   editId=null;
   $('paciente').value=''; $('pacienteCpf').value=''; $('dataCirurgia').value=hojeISO(); $('obs').value='';
+  if($('selUnidade')) $('selUnidade').value='';
   $('selSetor').value = (setoresMed.length===1) ? setoresMed[0].id : '';
   $('selSetor').disabled = (setoresMed.length===1);
   onSetorChange();
@@ -729,7 +748,7 @@ function novoLancamento(){
 }
 async function editarLancamento(id){
   const {data,error}=await sb.from('lancamentos')
-    .select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
+    .select('id,codigo_interno,paciente_nome,paciente_cpf,data_cirurgia,unidade,observacao,criado_em,foto_path,setor_id,medico_auxiliar_id,lancamento_itens(procedimento_id,nome),lancamento_fotos(id,path)')
     .eq('id',id).single();
   if(error||!data){ toast('Não foi possível abrir o lançamento.'); return; }
   if(!dentroDoPrazo(data.criado_em)){ toast('Prazo de 24 horas encerrado. Solicite ao gestor.'); carregarLista(); return; }
@@ -737,6 +756,7 @@ async function editarLancamento(id){
   editId=id;
   $('paciente').value=data.paciente_nome||''; $('pacienteCpf').value=data.paciente_cpf||''; $('dataCirurgia').value=data.data_cirurgia||isoDiaLocal(data.criado_em); $('obs').value=data.observacao||'';
   if($('selSetor')){ $('selSetor').value=data.setor_id||''; $('selSetor').disabled=true; }
+  if($('selUnidade')) $('selUnidade').value=data.unidade||''; atualizarUnidade();
   await carregarAuxiliares(data.setor_id||''); filtrarProcPorSetor();
   procsSelec=(data.lancamento_itens||[]).map(it=>({id:it.procedimento_id, nome:it.nome||(procs.find(p=>p.id===it.procedimento_id)?.nome)||'Procedimento'}));
   renderProcLista();
@@ -812,10 +832,12 @@ async function salvar(){
   const cpf=$('pacienteCpf').value.trim();
   const dataCir=$('dataCirurgia').value;
   const setor=$('selSetor') ? $('selSetor').value : '';
+  const unidade=$('selUnidade') ? $('selUnidade').value : '';
   if(!pac) return showErr('novoErr','Informe o nome do paciente.');
   if(soDigitos(cpf) && !cpfValido(cpf)) return showErr('novoErr','CPF do paciente inválido. Confira os números.');
   if(!dataCir) return showErr('novoErr','Informe a data da cirurgia.');
   if(!editId && !setor) return showErr('novoErr','Selecione o setor.');
+  if(ehDrConsulta(setor) && !unidade) return showErr('novoErr','Selecione a unidade (Botafogo ou Copacabana).');
   const regra = regraDaLista();
   const outro = (regra==='bloqueado') ? '' : ($('selAux') ? $('selAux').value : '');
   // papéis: por padrão EU sou o principal; se marquei "fui o auxiliar", inverte
@@ -843,12 +865,12 @@ async function salvar(){
   try{
     let lancId=editId;
     if(editId){
-      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
+      const {error:e1}=await sb.from('lancamentos').update({paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, unidade:unidade||null, observacao:obs||null, medico_id:principalId, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome}).eq('id',editId);
       if(e1) throw e1;
       const {error:e2}=await sb.from('lancamento_itens').delete().eq('lancamento_id',editId);
       if(e2) throw e2;
     } else {
-      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
+      const {data,error:e0}=await sb.from('lancamentos').insert({medico_id:principalId, setor_id:setor, paciente_nome:pac, paciente_cpf:cpf, data_cirurgia:dataCir, unidade:unidade||null, observacao:obs||null, medico_auxiliar_id:auxId, medico_auxiliar_nome:auxNome})
         .select('id,codigo_interno').single();
       if(e0) throw e0;
       lancId=data.id; $('okCodigo').textContent=data.codigo_interno||'—';
